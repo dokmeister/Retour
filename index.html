@@ -66,6 +66,11 @@ table.ov td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
 .proj .t{flex:1;min-width:0}
 .form{display:grid;gap:10px;max-width:360px}
 label.l{font-weight:600;font-size:.9rem}
+.usr{padding:12px 0;border-bottom:1px solid var(--line)}
+.usr:last-child{border-bottom:0}
+.perm{display:flex;gap:8px;align-items:center;min-height:34px}
+.perm input{width:20px;height:20px;accent-color:var(--acc)}
+summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
@@ -76,6 +81,7 @@ label.l{font-weight:600;font-size:.9rem}
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
 /* ===== VUL DIT IN (zie README.md) ===== */
@@ -90,23 +96,41 @@ if(!API_URL){$("who").textContent="Nog niet ingesteld.";$("app").innerHTML='<div
 function store(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}
 function load_(k){try{return localStorage.getItem(k)||""}catch(e){return""}}
 
-var owner=false,pw="",mid="",plist=[],cur=null,marks={},members={},myMarks={},lastV="",pending=0,ready=false;
+/* acct = ingelogd met account. owner = dat account is beheerder. Zonder account kan iemand via een deellink meedoen (mid). */
+var acct=false,owner=false,my={role:"",perms:{}},uid="",sess="",mid="",plist=[],users=[],lastInvite=null,cur=null,marks={},members={},myMarks={},lastV="",pending=0,ready=false,meSig="";
 var filter="all",q="",listF="",ovOpen=false;
+function can(p){return owner||!!(my.perms&&my.perms[p])}
+function whoText(){
+  if(!acct)return;
+  var n=load_("retourAcctName")||"jij";
+  $("who").textContent=owner?"Ingelogd als "+n+" (beheerder). Alleen vinkjes van beheerders tellen als bevestigd.":"Ingelogd als "+n+". Jouw scans zijn zichtbaar voor de beheerder."}
+function setMe(m){
+  if(!m)return;
+  my=m;owner=m.role==="beheerder";store("retourMe",JSON.stringify(m));
+  var s=JSON.stringify(m);if(s!==meSig){if(meSig)$("app").innerHTML="";meSig=s}
+  whoText()}
+function clearAuth(){acct=false;owner=false;my={role:"",perms:{}};uid="";sess="";mid="";meSig="";lastInvite=null;
+  ["retourUid","retourSess","retourMe","retourAcctName"].forEach(function(k){store(k,null)})}
+function onLogin(j){
+  acct=true;uid=j.uid;sess=j.session;mid="u_"+uid;store("retourUid",uid);store("retourSess",sess);store("retourAcctName",j.name);
+  meSig="";setMe(j.me);go()}
 
 /* ---------- Verbinding met het script ---------- */
-function authObj(){if(owner)return{owner:true,password:pw};var r=parseRoute();return{mid:mid,pid:r.pid,token:r.token}}
+function authObj(){if(acct)return{user:true,uid:uid,session:sess};var r=parseRoute();return{mid:mid,pid:r.pid,token:r.token}}
 function api(action,data,noAuth){
   var body=Object.assign({action:action,auth:noAuth?null:authObj()},data||{});
   return fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
     .then(function(r){return r.json()}).then(function(j){if(j.error)throw new Error(j.error);return j})}
 function w(action,data){pending++;
-  return api(action,data).catch(function(e){console.error(e);toast("Opslaan mislukt. Controleer je verbinding.","err");load()}).then(function(){pending--})}
-
+  return api(action,data).catch(function(e){console.error(e);if(e&&e.message==="auth")return handleErr(e);toast("Opslaan mislukt: "+scriptMsg(e),"err");load()}).then(function(){pending--})}
 function errText(e){var m=String(e&&e.message||e);
   if(e&&e.name==="TypeError")return"Geen verbinding met het script (geblokkeerd of verkeerde URL). Technisch: "+m;
   if(e&&e.name==="SyntaxError")return"Het script geeft geen geldig antwoord. Controleer bij Implementeren: Uitvoeren als ‘Ik’ en Toegang ‘Iedereen’.";
   return"Fout in het script: "+m}
+function scriptMsg(err){return err&&err.name==="Error"?err.message:errText(err)}
 function parseRoute(){var h=location.hash.slice(1);
+  if(h==="beheer")return{k:"admin",pid:""};
+  if(h.charAt(0)==="i"){var b=h.slice(1).split(".");return{k:"invite",pid:"",uid:b[0],token:b[1]||""}}
   if(h.charAt(0)==="j"){var a=h.slice(1).split(".");return{k:"join",pid:a[0],token:a[1]||""}}
   if(h.charAt(0)==="p")return{k:"owner",pid:h.slice(1)};return{k:"home",pid:""}}
 function curPid(){return parseRoute().pid}
@@ -216,34 +240,40 @@ function listNames(P){var s=[];(P.items||[]).forEach(function(i){if(i.list&&s.in
 function render(){
   if(!ready)return;
   var r=parseRoute();
-  if(owner){
+  if(acct){
     if(r.k==="owner"){if(cur&&cur.pid===r.pid)renderProject(cur.pid,cur.P);return}
+    if(r.k==="admin"&&owner)return renderAdmin();
     return renderHome()}
   if(cur)renderProject(cur.pid,cur.P)
 }
 function renderHome(){
   var ids=plist.slice().sort(function(a,b){return b.created-a.created});
-  var h='<section class="panel"><label class="btn pri">Nieuw project: retourlijst(en) kiezen<input type="file" id="pdf" accept="application/pdf" multiple></label><p class="mut" style="margin:10px 0 0">Kies één of meer pdf’s. Alle gekozen lijsten komen in hetzelfde project. Open daarna het project voor de deellink en om later meer lijsten toe te voegen.</p></section><section class="panel">';
-  if(!ids.length)h+='<p class="mut" style="margin:0">Nog geen projecten. Kies een pdf om te beginnen.</p>';
+  var h="";
+  if(can("import")||owner)h+='<section class="panel"><div class="row"><label class="btn pri">Nieuw project: retourlijst(en) kiezen<input type="file" id="pdf" accept="application/pdf" multiple></label>'+(owner?'<button data-go="beheer">Gebruikers beheren</button>':'')+'</div><p class="mut" style="margin:10px 0 0">Kies één of meer pdf’s. Alle gekozen lijsten komen in hetzelfde project.</p></section>';
+  h+='<section class="panel">';
+  if(!ids.length)h+='<p class="mut" style="margin:0">'+(can("import")?"Nog geen projecten. Kies een pdf om te beginnen.":"Er zijn nog geen projecten.")+'</p>';
   ids.forEach(function(p){
-    h+='<div class="proj" data-open="'+p.id+'"><div class="t"><h2>'+esc(p.title)+'</h2><div class="mut">'+p.done+" van "+p.total+' bevestigd'+(p.lists.length>1?" · "+p.lists.length+" lijsten":"")+'</div></div><button class="x" data-delp="'+p.id+'" aria-label="Project verwijderen">✕</button></div>'});
+    h+='<div class="proj" data-open="'+p.id+'"><div class="t"><h2>'+esc(p.title)+'</h2><div class="mut">'+p.done+" van "+p.total+' bevestigd'+(p.lists.length>1?" · "+p.lists.length+" lijsten":"")+'</div></div>'+(can("verwijderen")?'<button class="x" data-delp="'+p.id+'" aria-label="Project verwijderen">✕</button>':'')+'</div>'});
   $("app").innerHTML=h+'</section>';
   var f=$("pdf");if(f)f.addEventListener("change",function(e){var fl=Array.prototype.slice.call(e.target.files);e.target.value="";importFiles(fl,null)});
 }
 function renderProject(pid,P){
   if(!$("list")){
     var link=location.href.split("#")[0]+"#j"+pid+"."+(P.token||"");
-    $("app").innerHTML='<div class="row" style="margin-bottom:12px">'+(owner?'<button id="back">← Alle projecten</button>':'')+'</div><h2 id="ptitle"></h2>'+
-    (owner?'<section class="panel"><div class="row"><input type="text" id="lnk" class="grow" readonly value="'+esc(link)+'" aria-label="Deellink voor collega\'s"><button id="cplnk">Kopieer deellink</button></div><div id="mem" class="mut" style="margin-top:8px"></div></section>':'<p class="mut">Jij scant en vinkt af. De beheerder bevestigt daarna zelf.</p>')+
+    var addBtn='<label class="btn">Retourlijst toevoegen<input type="file" id="addpdf" accept="application/pdf" multiple></label>';
+    var tools=owner?'<section class="panel"><div class="row">'+addBtn+'<button id="stay">Rest laten staan</button><button id="unstay" class="hide">Laten staan ongedaan maken</button><button id="ov">Overzicht extra en blijft staan</button></div><div id="ovbox"></div></section>'
+      :(can("import")?'<section class="panel"><div class="row">'+addBtn+'</div></section>':'');
+    var share=P.token?'<section class="panel"><div class="row"><input type="text" id="lnk" class="grow" readonly value="'+esc(link)+'" aria-label="Deellink voor collega\'s"><button id="cplnk">Kopieer deellink</button></div>'+(owner?'<div id="mem" class="mut" style="margin-top:8px"></div>':'')+'</section>':'';
+    $("app").innerHTML='<div class="row" style="margin-bottom:12px">'+(acct?'<button id="back">← Alle projecten</button>':'')+'</div><h2 id="ptitle"></h2>'+tools+
+    (owner?'':'<p class="mut">Jij scant en vinkt af. De beheerder bevestigt daarna zelf.</p>')+share+
     '<section class="panel"><div class="row"><input type="text" id="code" class="grow" placeholder="Scan of typ artikelnummer, druk op Enter" autocomplete="off"><button class="pri" id="cam">QR-code scannen</button></div>'+
     '<div id="camwrap" class="hide" style="margin-top:10px"><video id="vid" playsinline muted></video><div class="row" style="margin-top:8px"><button id="camstop">Camera sluiten</button><span class="mut" id="camnote"></span></div></div></section>'+
     '<section class="panel"><div class="bar"><i class="b1" id="f1"></i><i class="b2" id="f2"></i></div><div class="stat"><span id="cnt"></span><span id="wt"></span></div>'+
-    '<div class="row" style="margin:12px 0"><input type="search" id="q" class="grow" placeholder="Zoek in lijst"><select id="lst" class="hide" aria-label="Filter op retourlijst"></select><button id="fAll">Alles</button><button id="fOpen">Open</button><button id="fDone">Afgevinkt</button></div><ul id="list"></ul></section>'+
-    (owner?'<section class="panel"><div class="row"><label class="btn">Retourlijst toevoegen<input type="file" id="addpdf" accept="application/pdf" multiple></label><button id="stay">Rest laten staan</button><button id="unstay" class="hide">Laten staan ongedaan maken</button><button id="ov">Overzicht extra en blijft staan</button></div><div id="ovbox"></div></section>':'');
-    if(owner){$("back").onclick=function(){stopCam();location.hash=""};
-      $("cplnk").onclick=function(){var i=$("lnk");i.select();try{navigator.clipboard.writeText(i.value).then(function(){toast("Link gekopieerd","ok")},function(){toast("Selecteer de link en kopieer handmatig","err")})}catch(e){toast("Selecteer de link en kopieer handmatig","err")}};
-      $("addpdf").addEventListener("change",function(e){var fl=Array.prototype.slice.call(e.target.files);e.target.value="";importFiles(fl,pid)});
-      $("stay").onclick=function(){stayRest(pid,false)};$("unstay").onclick=function(){stayRest(pid,true)};$("ov").onclick=function(){ovOpen=!ovOpen;render()}}
+    '<div class="row" style="margin:12px 0"><input type="search" id="q" class="grow" placeholder="Zoek in lijst"><select id="lst" class="hide" aria-label="Filter op retourlijst"></select><button id="fAll">Alles</button><button id="fOpen">Open</button><button id="fDone">Afgevinkt</button></div><ul id="list"></ul></section>';
+    if($("back"))$("back").onclick=function(){stopCam();location.hash=""};
+    if($("cplnk"))$("cplnk").onclick=function(){var i=$("lnk");i.select();try{navigator.clipboard.writeText(i.value).then(function(){toast("Link gekopieerd","ok")},function(){toast("Selecteer de link en kopieer handmatig","err")})}catch(e){toast("Selecteer de link en kopieer handmatig","err")}};
+    if($("addpdf"))$("addpdf").addEventListener("change",function(e){var fl=Array.prototype.slice.call(e.target.files);e.target.value="";importFiles(fl,pid)});
+    if($("stay")){$("stay").onclick=function(){stayRest(pid,false)};$("unstay").onclick=function(){stayRest(pid,true)};$("ov").onclick=function(){ovOpen=!ovOpen;render()}}
     $("code").addEventListener("keydown",function(e){if(e.key==="Enter"){scan(this.value);this.value=""}});
     $("cam").onclick=startCam;$("camstop").onclick=stopCam;
     $("q").addEventListener("input",function(){q=norm(this.value);render()});
@@ -286,10 +316,44 @@ function renderProject(pid,P){
   var parts=[];if(owner&&wait)parts.push(wait+" door collega’s gescand, nog bevestigen");if(stayN)parts.push(stayN+" blijven staan");$("wt").textContent=parts.join(" · ");
   if(owner){
     $("unstay").classList.toggle("hide",!(P.stay&&Object.keys(P.stay).length));
-    var mu=Object.keys(members);
-    $("mem").innerHTML=mu.length?'Collega’s met toegang: '+mu.map(function(u){return esc(members[u].name)+' <button class="x" data-delm="'+u+'" aria-label="Toegang van '+esc(members[u].name)+' intrekken">✕</button>'}).join(" "):"Nog geen collega’s toegevoegd. Stuur ze de deellink.";
+    var mu=Object.keys(members).filter(function(u){return u.indexOf("u_")!==0});
+    if($("mem"))$("mem").innerHTML=mu.length?'Collega’s via deellink: '+mu.map(function(u){return esc(members[u].name)+' <button class="x" data-delm="'+u+'" aria-label="Toegang van '+esc(members[u].name)+' intrekken">✕</button>'}).join(" "):"Nog geen collega’s via de deellink.";
     renderOv(pid,P)}
 }
+
+/* ---------- Beheer van gebruikers ---------- */
+var PERM_LABELS={import:"Retourlijsten importeren (nieuwe projecten en lijsten toevoegen)",delen:"Deellink van een project zien en delen",verwijderen:"Projecten verwijderen"};
+function inviteLink(id,token){return location.href.split("#")[0]+"#i"+id+"."+token}
+function renderAdmin(){
+  var stat={uitgenodigd:"Uitnodiging open",actief:"Actief",ingetrokken:"Ingetrokken"};
+  var h='<div class="row" style="margin-bottom:12px"><button id="back">← Alle projecten</button></div><h2>Gebruikers</h2>'+
+    '<section class="panel"><form id="invf" class="row"><input type="text" id="inm" class="grow" placeholder="Naam van de collega" required><button class="pri" type="submit">Uitnodiging maken</button></form><p class="mut" style="margin:8px 0 0">Je krijgt een link die je zelf appt of mailt. De collega kiest daarmee een gebruikersnaam en wachtwoord. Daarna stel je hieronder de rechten in.</p>';
+  if(lastInvite)h+='<div class="panel" style="margin:12px 0 0"><b>Uitnodiging voor '+esc(lastInvite.name)+'</b><div class="row" style="margin-top:8px"><input type="text" id="invlnk" class="grow" readonly value="'+esc(lastInvite.link)+'" aria-label="Uitnodigingslink"><button id="cpinv">Kopieer link</button></div></div>';
+  h+='</section><section class="panel">';
+  if(!users.length)h+='<p class="mut" style="margin:0">Nog geen gebruikers.</p>';
+  users.forEach(function(u){
+    var adm=u.role==="beheerder";
+    h+='<div class="usr" data-uid="'+u.id+'"><div><b>'+esc(u.name)+'</b> <span class="tag'+(u.status==="actief"?" ok":"")+'">'+esc(stat[u.status]||u.status)+'</span></div>'+(u.username?'<div class="mut">'+esc(u.username)+'</div>':'')+
+      '<div class="row" style="margin-top:8px"><label class="l" for="rl'+u.id+'">Rol</label><select id="rl'+u.id+'" data-role="1"><option value="medewerker"'+(adm?'':' selected')+'>Medewerker</option><option value="beheerder"'+(adm?' selected':'')+'>Beheerder (alle rechten)</option></select></div>';
+    if(adm)h+='<p class="mut" style="margin:6px 0 0">Beheerders kunnen alles: bevestigen, rest laten staan, extra retour afhandelen, gebruikers beheren, importeren, delen en verwijderen.</p>';
+    else{h+='<div style="margin-top:6px"><div class="mut">Extra rechten naast scannen en afvinken:</div>';
+      Object.keys(PERM_LABELS).forEach(function(k){h+='<label class="perm"><input type="checkbox" data-perm="'+k+'"'+(u.perms.indexOf(k)>=0?' checked':'')+'><span>'+PERM_LABELS[k]+'</span></label>'});h+='</div>'}
+    h+='<div class="row" style="margin-top:6px"><button class="sm" data-ua="reset|'+u.id+'">'+(u.status==="actief"?"Wachtwoord resetten":"Nieuwe uitnodigingslink")+'</button>'+(u.status==="actief"?'<button class="sm" data-ua="revoke|'+u.id+'">Toegang intrekken</button>':'')+'<button class="sm" data-ua="del|'+u.id+'">Verwijderen</button></div></div>'});
+  $("app").innerHTML=h+'</section>';
+  $("back").onclick=function(){location.hash=""};
+  $("invf").onsubmit=function(e){e.preventDefault();var n=$("inm").value.trim();if(!n)return;
+    api("invite",{name:n}).then(function(j){lastInvite={name:n,link:inviteLink(j.id,j.token)};return load()}).catch(function(err){toast(scriptMsg(err),"err")})};
+  var c=$("cpinv");if(c)c.onclick=function(){var i=$("invlnk");i.select();try{navigator.clipboard.writeText(i.value).then(function(){toast("Link gekopieerd","ok")},function(){toast("Selecteer de link en kopieer handmatig","err")})}catch(e){toast("Selecteer de link en kopieer handmatig","err")}}}
+function saveRights(row){
+  var id=row.getAttribute("data-uid"),role=row.querySelector("select").value,perms={};
+  Array.prototype.forEach.call(row.querySelectorAll("input[data-perm]"),function(c){perms[c.getAttribute("data-perm")]=c.checked});
+  api("setRights",{uid:id,role:role,perms:perms}).then(function(){toast("Rechten opgeslagen","ok");return load()}).catch(function(err){toast(scriptMsg(err),"err");load()})}
+function userAction(act,id){
+  var u=users.find(function(x){return x.id===id}),nm=u?u.name:"";
+  var run=function(action,data,after){api(action,data).then(function(j){if(after)after(j);return load()}).catch(function(err){toast(scriptMsg(err),"err")})};
+  if(act==="reset")return run("resetUser",{uid:id},function(j){lastInvite={name:nm,link:inviteLink(j.id,j.token)}});
+  if(act==="revoke"){if(confirm("Toegang van "+nm+" intrekken? Diegene kan dan niet meer inloggen."))run("revokeUser",{uid:id});return}
+  if(act==="del"){if(confirm(nm+" verwijderen? De scans blijven bewaard."))run("deleteUser",{uid:id})}}
 
 /* ---------- Scannen ---------- */
 var lastScan="",lastT=0,stream=null,tmr=0,reader=null;
@@ -312,14 +376,29 @@ function scan(raw){
       modal("Niet op de lijst",raw+" staat niet op deze retourlijst.",[{t:"Negeren"},{t:"Gaat extra retour",pri:true,fn:function(){addExtra(pid,norm(raw),raw,"Niet op de lijst",1);toast("Genoteerd als extra retour","ok")}}]);
     }else toast("Niet op de lijst: "+raw,"err")}
 }
+/* Snelle QR-lezer: ingebouwde detector waar die bestaat, anders jsQR op het camerabeeld, anders ZXing. */
+function jsqrRead(v,cv,cx){
+  if(!window.jsQR||!v.videoWidth)return"";
+  var sc=Math.min(1,900/v.videoWidth);cv.width=Math.round(v.videoWidth*sc);cv.height=Math.round(v.videoHeight*sc);
+  cx.drawImage(v,0,0,cv.width,cv.height);
+  var d=cx.getImageData(0,0,cv.width,cv.height),r=jsQR(d.data,d.width,d.height,{inversionAttempts:"dontInvert"});
+  return r&&r.data?r.data:""}
 async function startCam(){
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
-    var v=$("vid");v.srcObject=stream;await v.play();$("camwrap").classList.remove("hide");$("camnote").textContent="Houd de QR-code in beeld";
-    if("BarcodeDetector" in window){var det;try{det=new BarcodeDetector({formats:["qr_code"]})}catch(e){det=new BarcodeDetector()}
-      (function loop(){if(!stream)return;det.detect(v).then(function(r){if(r.length)scan(r[0].rawValue)}).catch(function(){}).then(function(){tmr=setTimeout(loop,250)})})();
-    }else if(window.ZXing){reader=new ZXing.BrowserMultiFormatReader();reader.decodeFromVideoElement(v,function(res){if(res)scan(res.getText())})}
-    else $("camnote").textContent="Scannen niet ondersteund; typ de code."
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});
+    var v=$("vid");v.srcObject=stream;await v.play();
+    try{var tr=stream.getVideoTracks()[0],cap=tr.getCapabilities&&tr.getCapabilities();
+      if(cap&&cap.focusMode&&cap.focusMode.indexOf("continuous")>=0)await tr.applyConstraints({advanced:[{focusMode:"continuous"}]})}catch(e){}
+    $("camwrap").classList.remove("hide");$("camnote").textContent="Houd de QR-code in beeld, niet te dichtbij";
+    var det=null;if("BarcodeDetector" in window){try{det=new BarcodeDetector({formats:["qr_code"]})}catch(e){try{det=new BarcodeDetector()}catch(e2){det=null}}}
+    if(!det&&!window.jsQR&&window.ZXing){reader=new ZXing.BrowserQRCodeReader();reader.decodeFromVideoElement(v,function(res){if(res)scan(res.getText())});return}
+    if(!det&&!window.jsQR){$("camnote").textContent="Scannen niet ondersteund; typ de code.";return}
+    var cv=document.createElement("canvas"),cx=cv.getContext("2d",{willReadFrequently:true});
+    (function loop(){
+      if(!stream)return;
+      var p=det?det.detect(v).then(function(r){return r.length?r[0].rawValue:""}).catch(function(){return""}):Promise.resolve(jsqrRead(v,cv,cx));
+      p.then(function(val){if(val)scan(val)}).then(function(){tmr=setTimeout(loop,det?120:100)})
+    })();
   }catch(e){console.error("camera:",e&&e.name,e&&e.message);stopCam();
     var n=e&&e.name,msg=n==="NotAllowedError"?"Camera geweigerd. Sta de camera toe in de instellingen van je browser voor deze site.":n==="NotFoundError"?"Geen camera gevonden op dit apparaat.":n==="NotReadableError"?"De camera wordt al door een andere app gebruikt.":"Camera starten mislukt.";
     toast(msg,"err")}
@@ -330,18 +409,34 @@ function stopCam(){
   var c=$("camwrap");if(c)c.classList.add("hide")}
 
 /* ---------- Inloggen, laden en routes ---------- */
-function showLogin(msg){
-  $("who").textContent="Beheerder: log in. Collega: open de link die je hebt gekregen.";
-  $("app").innerHTML='<section class="panel"><form class="form" id="lf"><label class="l" for="pw">Beheerderswachtwoord</label><input type="password" id="pw" autocomplete="current-password" required><button class="pri" type="submit">Inloggen</button></form></section>';
-  if(msg)toast(msg,"err");
-  $("lf").onsubmit=function(e){e.preventDefault();var p=$("pw").value;pw=p;owner=true;
-    api("login").then(function(){store("retourPw",p);go()}).catch(function(err){owner=false;pw="";console.error(err);toast(err.message==="auth"?"Verkeerd wachtwoord.":errText(err),"err")})}}
+async function showLogin(msg){
+  stopCam();$("who").textContent="Log in om te beginnen.";
+  var setup=false,err="";
+  try{setup=(await api("status",{},true)).needsSetup}catch(e){console.error(e);err=errText(e)}
+  if(acct)return; /* ondertussen ingelogd */
+  var h='';
+  if(setup)h+='<section class="panel"><h2>Eerste keer: maak het beheerdersaccount aan</h2><form class="form" id="sf"><label class="l" for="sc">Installatiecode (SETUP_CODE uit het script)</label><input type="password" id="sc" autocomplete="off" required><label class="l" for="sn">Jouw naam</label><input type="text" id="sn" autocomplete="name" required><label class="l" for="su">Gebruikersnaam</label><input type="text" id="su" autocomplete="username" autocapitalize="none" autocorrect="off" required><label class="l" for="sp">Wachtwoord (minimaal 8 tekens)</label><input type="password" id="sp" autocomplete="new-password" minlength="8" required><button class="pri" type="submit">Beheerdersaccount aanmaken</button></form></section>';
+  h+='<section class="panel"><h2>Inloggen</h2><form class="form" id="af"><label class="l" for="un">Gebruikersnaam</label><input type="text" id="un" autocomplete="username" autocapitalize="none" autocorrect="off" required><label class="l" for="pw2">Wachtwoord</label><input type="password" id="pw2" autocomplete="current-password" required><button class="pri" type="submit">Inloggen</button></form></section>';
+  $("app").innerHTML=h;
+  if(msg)toast(msg,"err");else if(err)toast(err,"err");
+  if($("sf"))$("sf").onsubmit=function(e){e.preventDefault();
+    api("setupAdmin",{setupCode:$("sc").value,name:$("sn").value,username:$("su").value,password:$("sp").value},true).then(onLogin).catch(function(er){console.error(er);toast(scriptMsg(er),"err")})};
+  $("af").onsubmit=function(e){e.preventDefault();
+    api("userLogin",{username:$("un").value,password:$("pw2").value},true).then(onLogin).catch(function(er){console.error(er);toast(er.message==="auth"?"Gebruikersnaam of wachtwoord klopt niet, of je toegang is ingetrokken.":scriptMsg(er),"err")})}}
 function showName(r){
   $("who").textContent="Je bent uitgenodigd om mee te scannen.";
   $("app").innerHTML='<section class="panel"><form class="form" id="nf"><label class="l" for="nm">Jouw naam</label><input type="text" id="nm" autocomplete="name" required value="'+esc(load_("retourName"))+'"><p class="mut" style="margin:0">De beheerder ziet bij elk artikel wie het gescand heeft.</p><button class="pri" type="submit">Doorgaan</button></form></section>';
   $("nf").onsubmit=function(e){e.preventDefault();var n=$("nm").value.trim();if(!n)return;store("retourName",n);
     api("join",{pid:r.pid,token:r.token,name:n},true).then(function(j){mid=j.mid;store("mid_"+r.pid,mid);go()}).catch(function(){toast("Deze link werkt niet (meer). Vraag de beheerder om een nieuwe.","err")})}}
+function showAccept(r){
+  $("who").textContent="Je bent uitgenodigd.";
+  $("app").innerHTML='<section class="panel"><h2>Maak je account aan</h2><form class="form" id="cf"><label class="l" for="cu">Gebruikersnaam (bijvoorbeeld je e-mailadres)</label><input type="text" id="cu" autocomplete="username" autocapitalize="none" autocorrect="off" required><label class="l" for="cp">Kies een wachtwoord (minimaal 8 tekens)</label><input type="password" id="cp" autocomplete="new-password" minlength="8" required><button class="pri" type="submit">Account aanmaken</button></form></section>';
+  $("cf").onsubmit=function(e){e.preventDefault();
+    api("acceptInvite",{uid:r.uid,token:r.token,username:$("cu").value,password:$("cp").value},true).then(function(j){
+      clearAuth();try{history.replaceState(null,"",location.pathname+location.search)}catch(x){}onLogin(j)
+    }).catch(function(err){console.error(err);toast(err.message==="auth"?"Deze uitnodiging is niet meer geldig. Vraag de beheerder om een nieuwe.":scriptMsg(err),"err")})}}
 function applyState(j){
+  if(j.me)setMe(j.me);
   var P={title:j.project.title,token:j.project.token,items:j.items,done:j.done||{},extra:j.extra||{},stay:j.stay||{}};
   cur={pid:j.project.id,P:P};members=j.members||{};
   if(owner){marks=j.marks||{};myMarks={}}else{marks={};myMarks=(j.marks&&j.marks[mid])||{}}
@@ -349,47 +444,59 @@ function applyState(j){
 function handleErr(e){
   console.error(e);var r=parseRoute();
   if(e&&e.message==="auth"){
-    if(owner){owner=false;pw="";store("retourPw",null);$("out").classList.add("hide");return showLogin("Wachtwoord klopt niet meer. Log opnieuw in.")}
+    if(acct){clearAuth();$("out").classList.add("hide");$("app").innerHTML="";return showLogin("Je sessie is verlopen of je toegang is ingetrokken. Log opnieuw in.")}
     store("mid_"+r.pid,null);mid="";$("app").innerHTML='<div class="panel"><p>Deze link is niet meer geldig of je toegang is ingetrokken. Vraag de beheerder om een nieuwe link.</p></div>';return}
   toast(errText(e),"err")}
 async function load(){
   var r=parseRoute();
   try{
-    if(owner&&r.k!=="owner"){var j=await api("list");plist=j.projects;lastV=j.v;ready=true;render()}
+    if(acct&&r.k!=="owner"){
+      if(r.k==="admin"&&owner){users=(await api("users")).users;ready=true;render();return}
+      var j=await api("list");setMe(j.me);plist=j.projects;lastV=j.v;ready=true;render()}
     else if(r.pid){applyState(await api("state",{pid:r.pid}))}
   }catch(e){handleErr(e)}}
 function go(){
   stopCam();cur=null;marks={};members={};myMarks={};lastV="";ready=false;$("app").innerHTML="";
   var r=parseRoute();
-  $("out").classList.toggle("hide",!owner);
-  if(!owner){
+  $("out").classList.toggle("hide",!acct);
+  if(r.k==="invite")return showAccept(r);
+  if(!acct){
     if(r.k==="join"){mid=load_("mid_"+r.pid);if(!mid)return showName(r);
-      $("who").textContent="Je bent ingelogd als collega. Jouw scans zijn zichtbaar voor de beheerder.";return load()}
+      $("who").textContent="Je doet mee via een deellink. Jouw scans zijn zichtbaar voor de beheerder.";return load()}
     return showLogin()}
-  $("who").textContent="Je bent de hoofdgebruiker. Alleen jouw vinkjes tellen als bevestigd.";
+  whoText();
   if(r.k==="join"){location.hash="#p"+r.pid;return}
+  if(r.k==="admin"&&!owner){location.hash="";return}
   load()}
 
 document.addEventListener("click",function(e){
   var t=e.target;if(!t.getAttribute)return;
+  var gg=t.getAttribute("data-go");if(gg){location.hash="#"+gg;return}
+  var ua=t.getAttribute("data-ua");if(ua){var p2=ua.split("|");userAction(p2[0],p2[1]);return}
   var ov=t.getAttribute("data-ov");if(ov){var a=ov.split("|");resolveOver(a[0],a[1],a[2]);return}
   var dm=t.getAttribute("data-delm");if(dm){if(confirm("Toegang van deze collega intrekken?")){delete members[dm];render();w("removeMember",{pid:curPid(),mid:dm})}return}
   var d=t.getAttribute("data-delp");
   if(d){e.stopPropagation();if(confirm("Project en alle afvinkingen verwijderen?")){plist=plist.filter(function(p){return p.id!==d});render();w("deleteProject",{pid:d})}return}
   var o=t.closest&&t.closest("[data-open]");if(o)location.hash="#p"+o.getAttribute("data-open")});
+document.addEventListener("change",function(e){
+  var t=e.target;if(!t.getAttribute||!(t.hasAttribute("data-role")||t.hasAttribute("data-perm")))return;
+  var row=t.closest("[data-uid]");if(row)saveRights(row)});
 window.addEventListener("hashchange",go);
-$("out").onclick=function(){owner=false;pw="";store("retourPw",null);go()};
+$("out").onclick=function(){clearAuth();go()};
 
 /* Elke 6 seconden kijken of er iets veranderd is (alleen als de pagina zichtbaar is). */
 setInterval(function(){
   if(document.hidden||pending>0||!ready)return;
-  var r=parseRoute(),key=(owner&&r.k!=="owner")?"_all":r.pid;if(!key)return;
+  var r=parseRoute();if(r.k==="admin"||r.k==="invite")return;
+  var key=(acct&&r.k!=="owner")?"_all":r.pid;if(!key)return;
   api("version",{key:key},true).then(function(j){if(j.v!==lastV&&pending===0)load()}).catch(function(){})},6000);
 
-/* Start: onthouden beheerder automatisch inloggen */
-pw=load_("retourPw");
-if(pw){owner=true;api("login").then(go).catch(function(e){owner=false;pw="";if(e&&e.message==="auth")store("retourPw",null);go()})}
-else go();
+/* Start: opgeslagen sessie hergebruiken */
+if(load_("retourSess")&&load_("retourUid")){
+  acct=true;uid=load_("retourUid");sess=load_("retourSess");mid="u_"+uid;
+  try{var sm=JSON.parse(load_("retourMe")||"null");if(sm){my=sm;owner=sm.role==="beheerder";meSig=JSON.stringify(sm)}}catch(e){}
+}
+go();
 })();
 </script>
 </body>
