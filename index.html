@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Retourcontrole</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap">
+<style>
+:root{--bg:#f3f5f7;--panel:#fff;--ink:#14202b;--mut:#5d6b78;--line:#d9dfe5;--acc:#1f5eff;--acc-ink:#fff;--ok:#0f8a4b;--okbg:#e2f5ea;--wait:#8a5a00;--waitbg:#fff1d2;--bad:#c62828}
+@media (prefers-color-scheme:dark){:root{--bg:#10161c;--panel:#18212a;--ink:#e8eef3;--mut:#93a1ae;--line:#2a3541;--acc:#5b8cff;--acc-ink:#07121f;--ok:#46d489;--okbg:#14301f;--wait:#ffcf66;--waitbg:#3a2d0c;--bad:#ff7b7b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 Archivo,system-ui,-apple-system,"Segoe UI",sans-serif;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+main{max-width:780px;margin:0 auto;padding:16px}
+h1{font-size:1.5rem;font-weight:800;margin:4px 0 2px}
+h2{font-size:1.15rem;margin:0 0 4px}
+.sub,.mut{color:var(--mut);font-size:.9rem}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+button,.btn{font:600 .95rem Archivo,system-ui,sans-serif;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:10px 14px;border-radius:8px;cursor:pointer;min-height:44px;display:inline-flex;align-items:center}
+button.pri,.btn.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+button:focus-visible,input:focus-visible,select:focus-visible,.btn:focus-within{outline:3px solid var(--acc);outline-offset:2px}
+input[type=text],input[type=search],input[type=password]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:44px;width:100%}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:44px;max-width:100%}
+.grow{flex:1 1 160px}
+.bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden;margin:8px 0 4px;display:flex}
+.bar i{display:block;height:100%;transition:width .25s}
+.b1{background:var(--ok)}.b2{background:#e0a100}
+.stat{display:flex;justify-content:space-between;color:var(--mut);font-size:.9rem;gap:8px;flex-wrap:wrap}
+ul{list-style:none;margin:0;padding:0}
+li.it{display:flex;gap:12px;align-items:center;padding:12px 6px;border-bottom:1px solid var(--line)}
+li.it:last-child{border-bottom:0}
+li.it input{width:26px;height:26px;flex:none;accent-color:var(--ok)}
+li.it .t{flex:1;min-width:0}
+li.it .c{font-weight:600;word-break:break-all}
+li.it .d{color:var(--mut);font-size:.9rem}
+li.it .n{font-size:.85rem;color:var(--wait)}
+li.it.done{background:var(--okbg)}
+li.it.done .c{text-decoration:line-through;color:var(--mut)}
+li.it.wait{background:var(--waitbg)}
+li.it.stay{background:var(--bg)}
+li.it.flash{outline:3px solid var(--acc)}
+.qty{font-weight:800;white-space:nowrap}
+.step{display:flex;align-items:center;gap:4px}
+.step .sm{margin:0;min-width:40px;min-height:40px;justify-content:center;font-size:1.1rem}
+.step button:disabled{opacity:.35}
+.tag{display:inline-block;font-size:.8rem;font-weight:600;border-radius:6px;padding:1px 8px;margin:3px 4px 0 0;background:var(--waitbg);color:var(--wait)}
+.tag.ok{background:var(--okbg);color:var(--ok)}
+.tag.bad{background:var(--waitbg);color:var(--bad);display:block;margin-right:0}
+.tag.stay{background:var(--line);color:var(--ink)}
+.x{border:0;background:none;color:var(--mut);padding:6px;min-height:36px}
+#toast{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;margin-bottom:10px;padding:10px 14px;border-radius:8px;font-weight:600;display:none}
+#toast.ok{display:block;background:var(--okbg);color:var(--ok)}
+#toast.err{display:block;background:var(--panel);color:var(--bad);border:1px solid var(--bad)}
+video{width:100%;border-radius:8px;background:#000;max-height:50vh;object-fit:cover}
+.hide{display:none}
+input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+.modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;max-width:420px;width:100%}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+table.ov{width:100%;border-collapse:collapse;font-size:.9rem}
+table.ov td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+.sm{min-height:34px;padding:4px 10px;font-size:.85rem;margin:4px 6px 4px 0}
+.proj{display:flex;gap:10px;align-items:center;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.proj:last-child{border-bottom:0}
+.proj .t{flex:1;min-width:0}
+.form{display:grid;gap:10px;max-width:360px}
+label.l{font-weight:600;font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+<div class="head"><div><h1>Retourcontrole</h1><p class="sub" id="who">Laden…</p></div><button id="out" class="hide">Uitloggen</button></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="app"></div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+/* ===== VUL DIT IN (zie README.md) ===== */
+var API_URL="https://script.google.com/macros/s/AKfycbxTRTePUvdtyvWWLOXaprklpm3C5SWaI5QVzNDsGwJcXHlQCRTZDDQLmiaJDs1bfQBc/exec"; /* de Web-app-URL van je Apps Script, eindigt op /exec */
+/* ====================================== */
+(function(){
+var $=function(i){return document.getElementById(i)};
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function norm(s){return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"")}
+var tt;function toast(t,k){var e=$("toast");e.textContent=t;e.className=k;clearTimeout(tt);tt=setTimeout(function(){e.className=""},3500)}
+if(!API_URL){$("who").textContent="Nog niet ingesteld.";$("app").innerHTML='<div class="panel"><p>Vul bovenin <b>index.html</b> de <b>API_URL</b> in. Zie README.md.</p></div>';return}
+function store(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}
+function load_(k){try{return localStorage.getItem(k)||""}catch(e){return""}}
+
+var owner=false,pw="",mid="",plist=[],cur=null,marks={},members={},myMarks={},lastV="",pending=0,ready=false;
+var filter="all",q="",listF="",ovOpen=false;
+
+/* ---------- Verbinding met het script ---------- */
+function authObj(){if(owner)return{owner:true,password:pw};var r=parseRoute();return{mid:mid,pid:r.pid,token:r.token}}
+function api(action,data,noAuth){
+  var body=Object.assign({action:action,auth:noAuth?null:authObj()},data||{});
+  return fetch(API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
+    .then(function(r){return r.json()}).then(function(j){if(j.error)throw new Error(j.error);return j})}
+function w(action,data){pending++;
+  return api(action,data).catch(function(e){console.error(e);toast("Opslaan mislukt. Controleer je verbinding.","err");load()}).then(function(){pending--})}
+
+function errText(e){var m=String(e&&e.message||e);
+  if(e&&e.name==="TypeError")return"Geen verbinding met het script (geblokkeerd of verkeerde URL). Technisch: "+m;
+  if(e&&e.name==="SyntaxError")return"Het script geeft geen geldig antwoord. Controleer bij Implementeren: Uitvoeren als ‘Ik’ en Toegang ‘Iedereen’.";
+  return"Fout in het script: "+m}
+function parseRoute(){var h=location.hash.slice(1);
+  if(h.charAt(0)==="j"){var a=h.slice(1).split(".");return{k:"join",pid:a[0],token:a[1]||""}}
+  if(h.charAt(0)==="p")return{k:"owner",pid:h.slice(1)};return{k:"home",pid:""}}
+function curPid(){return parseRoute().pid}
+function getP(pid){return cur&&cur.pid===pid?cur.P:null}
+
+/* ---------- Tellers ---------- */
+function me(pid,id){var P=getP(pid);
+  if(owner)return(P&&P.done&&P.done[id])||0;
+  return(myMarks.counts&&myMarks.counts[id])||0}
+function others(pid,id){var r=[];if(!owner)return r;
+  Object.keys(marks).forEach(function(u){var c=marks[u].counts,n=c&&c[id];if(n>0)r.push({u:u,n:n})});return r}
+function overOf(u,id){var m=owner?marks[u]:myMarks;return(m&&m.over&&m.over[id])||0}
+function nameOf(u){return(members[u]&&members[u].name)||"Collega"}
+function setCount(pid,id,n){id=String(id);
+  if(owner){var D=cur.P.done;if(n>0)D[id]=n;else delete D[id]}
+  else{myMarks.counts=myMarks.counts||{};if(n>0)myMarks.counts[id]=n;else delete myMarks.counts[id]}
+  render();return w("setCount",{pid:pid,item:id,n:n})}
+function setOver(u,pid,id,n){
+  if(owner){marks[u]=marks[u]||{counts:{},over:{}};marks[u].over=marks[u].over||{};marks[u].over[id]=n}
+  else{myMarks.over=myMarks.over||{};myMarks.over[id]=n}
+  render();return w("setOver",{pid:pid,item:id,mid:u,n:n})}
+function addExtra(pid,key,code,desc,n){key=key||"onbekend";var P=cur.P;P.extra=P.extra||{};
+  var c=(P.extra[key]&&P.extra[key].n)||0;P.extra[key]={code:code,desc:desc,n:c+n};
+  render();return w("addExtra",{pid:pid,key:key,code:code,desc:desc,n:n})}
+function resolveOver(u,id,act){var pid=curPid(),P=cur.P,it=P.items.find(function(i){return i.id===id}),n=overOf(u,id);
+  if(act==="extra")addExtra(pid,norm(it.code),it.code,it.desc,n);setOver(u,pid,id,0)}
+
+function modal(title,text,btns){
+  var m=document.createElement("div");m.className="modal";m.setAttribute("role","dialog");
+  m.innerHTML='<div class="box"><h2>'+esc(title)+'</h2><p>'+esc(text)+'</p><div class="btns"></div></div>';
+  var b=m.querySelector(".btns");
+  btns.forEach(function(x){var e=document.createElement("button");e.textContent=x.t;if(x.pri)e.className="pri";e.onclick=function(){m.remove();if(x.fn)x.fn()};b.appendChild(e)});
+  document.body.appendChild(m);b.lastChild.focus()}
+
+/* ---------- Laten staan en overzicht ---------- */
+function stayRest(pid,undo){
+  var P=cur.P,o={},c=0,u=0;
+  if(!undo)P.items.forEach(function(i){var r=i.qty-me(pid,i.id);if(r>0){o[i.id]=r;c++;u+=r}});
+  var go=function(){P.stay=o;render();w("setStay",{pid:pid,map:o});toast(undo?"Teruggezet":c+" artikelen blijven staan","ok")};
+  if(undo)return go();
+  if(!c)return toast("Alles is al afgevinkt","ok");
+  modal("Rest laten staan?",c+" artikelen ("+u+" stuks) zijn niet afgevinkt en blijven staan. Je kunt dit later ongedaan maken.",[{t:"Annuleren"},{t:"Laten staan",pri:true,fn:go}])}
+function lists(pid,P){
+  var extra=Object.keys(P.extra||{}).map(function(k){return P.extra[k]}).filter(function(x){return x.n>0});
+  var stay=P.items.filter(function(i){return(P.stay&&P.stay[i.id]||0)>0&&me(pid,i.id)<i.qty}).map(function(i){return{code:i.code,desc:i.desc,list:i.list||"",n:Math.min(P.stay[i.id],i.qty-me(pid,i.id))}});
+  return{extra:extra,stay:stay}}
+function csv(L){var r=["Soort;Lijst;Artikelnr;Omschrijving;Aantal"];L.extra.forEach(function(x){r.push(["Extra retour","",x.code,x.desc,x.n].join(";"))});L.stay.forEach(function(x){r.push(["Blijft staan",x.list,x.code,x.desc,x.n].join(";"))});return r.join("\n")}
+function renderOv(pid,P){
+  var b=$("ovbox");if(!b)return;if(!ovOpen){b.innerHTML="";return}
+  var L=lists(pid,P);
+  function tbl(t,a){return'<h2 style="margin-top:14px">'+t+' ('+a.length+')</h2>'+(a.length?'<table class="ov">'+a.map(function(x){return'<tr><td>'+esc(x.code)+'</td><td>'+esc(x.desc)+'</td><td><b>'+x.n+'×</b></td></tr>'}).join("")+'</table>':'<p class="mut">Geen.</p>')}
+  b.innerHTML=tbl("Extra retour",L.extra)+tbl("Blijft staan",L.stay)+'<div class="btns"><button id="ovsave">Opslaan als bestand</button><button id="ovcopy">Kopiëren</button></div>';
+  $("ovsave").onclick=function(){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv(L)],{type:"text/csv"}));a.download="retour-overzicht.csv";document.body.appendChild(a);a.click();a.remove()};
+  $("ovcopy").onclick=function(){try{navigator.clipboard.writeText(csv(L)).then(function(){toast("Overzicht gekopieerd","ok")},function(){toast("Kopiëren geblokkeerd","err")})}catch(e){toast("Kopiëren geblokkeerd","err")}}}
+
+/* ---------- PDF ---------- */
+var DT=/^\d\d-\d\d-\d{4} \d\d:\d\d$/;
+function parseRows(rows){
+  var items=[],nr="",name="";
+  rows.forEach(function(cells){
+    var j=cells.join(" ").replace(/\s+/g," ").trim(),m;
+    if(!nr&&(m=j.match(/Projectnr\.:\s*(\d+)/)))nr=m[1];
+    if(!name&&(m=j.match(/Projectomschrijving:\s*(.+)$/)))name=m[1].trim();
+    if(m=j.match(/^Opm(?:erkingen|\. logistiek):\s*(.*)$/)){
+      if(items.length&&m[1]){var l=items[items.length-1];l.note=l.note?l.note+"; "+m[1]:m[1]}return}
+    var it=null;
+    if(cells.length>=6&&DT.test(cells[0])&&DT.test(cells[1])&&/^\d+$/.test(cells[cells.length-1])){
+      var L=cells.length;it={code:cells[2],desc:cells[3],desc2:cells.slice(4,L-2).join(" "),loc:cells[L-2],qty:parseInt(cells[L-1],10)}}
+    else if(m=j.match(/^\d\d-\d\d-\d{4} \d\d:\d\d \d\d-\d\d-\d{4} \d\d:\d\d (\S+) (.+) (\d+)$/)){
+      it={code:m[1],desc:m[2],desc2:"",loc:"",qty:parseInt(m[3],10)}}
+    if(it){it.note="";items.push(it)}
+  });
+  return{items:items,title:(nr?nr+" · ":"")+(name||"Retourlijst")}
+}
+async function parseFile(file){
+  pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  var doc=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise,rows=[];
+  for(var p=1;p<=doc.numPages;p++){
+    var tc=await(await doc.getPage(p)).getTextContent(),g={};
+    tc.items.forEach(function(it){if(!it.str.trim())return;var y=Math.round(it.transform[5]/3);(g[y]=g[y]||[]).push({x:it.transform[4],s:it.str.trim()})});
+    Object.keys(g).map(Number).sort(function(a,b){return b-a}).forEach(function(y){rows.push(g[y].sort(function(a,b){return a.x-b.x}).map(function(r){return r.s}))});
+  }
+  var r=parseRows(rows),ln=file.name.replace(/\.pdf$/i,"");
+  r.items.forEach(function(x){x.list=ln});
+  return r}
+/* Met pid: toevoegen aan dat project. Zonder pid: nieuw project met alle pdf's als aparte lijsten. */
+async function importFiles(files,pid){
+  if(!files.length)return;
+  toast("PDF’s worden gelezen…","ok");
+  try{
+    var P=pid?getP(pid):null,existing=P?P.items:[],all=[],first=null,skipped=[];
+    for(var k=0;k<files.length;k++){
+      var f=files[k],ln=f.name.replace(/\.pdf$/i,"");
+      if(existing.concat(all).some(function(i){return i.list===ln})&&!confirm("‘"+ln+"’ is al toegevoegd. Toch nogmaals toevoegen?"))continue;
+      var r=await parseFile(f);
+      if(!r.items.length){skipped.push(f.name);continue}
+      if(!first)first=r;all=all.concat(r.items)}
+    if(!all.length){toast("Geen artikelregels gevonden in "+(files.length>1?"deze pdf’s":"deze pdf"),"err");return}
+    if(P){await api("addItems",{pid:pid,items:all});await load()}
+    else{var j=await api("createProject",{title:first.title,items:all});location.hash="#p"+j.id}
+    toast(all.length+" artikelen toegevoegd"+(skipped.length?". Niet gelezen: "+skipped.join(", "):""),skipped.length?"err":"ok");
+  }catch(e){console.error(e);toast("Pdf lezen of opslaan mislukt","err")}
+}
+
+/* ---------- Schermen ---------- */
+function listNames(P){var s=[];(P.items||[]).forEach(function(i){if(i.list&&s.indexOf(i.list)<0)s.push(i.list)});return s}
+function render(){
+  if(!ready)return;
+  var r=parseRoute();
+  if(owner){
+    if(r.k==="owner"){if(cur&&cur.pid===r.pid)renderProject(cur.pid,cur.P);return}
+    return renderHome()}
+  if(cur)renderProject(cur.pid,cur.P)
+}
+function renderHome(){
+  var ids=plist.slice().sort(function(a,b){return b.created-a.created});
+  var h='<section class="panel"><label class="btn pri">Nieuw project: retourlijst(en) kiezen<input type="file" id="pdf" accept="application/pdf" multiple></label><p class="mut" style="margin:10px 0 0">Kies één of meer pdf’s. Alle gekozen lijsten komen in hetzelfde project. Open daarna het project voor de deellink en om later meer lijsten toe te voegen.</p></section><section class="panel">';
+  if(!ids.length)h+='<p class="mut" style="margin:0">Nog geen projecten. Kies een pdf om te beginnen.</p>';
+  ids.forEach(function(p){
+    h+='<div class="proj" data-open="'+p.id+'"><div class="t"><h2>'+esc(p.title)+'</h2><div class="mut">'+p.done+" van "+p.total+' bevestigd'+(p.lists.length>1?" · "+p.lists.length+" lijsten":"")+'</div></div><button class="x" data-delp="'+p.id+'" aria-label="Project verwijderen">✕</button></div>'});
+  $("app").innerHTML=h+'</section>';
+  var f=$("pdf");if(f)f.addEventListener("change",function(e){var fl=Array.prototype.slice.call(e.target.files);e.target.value="";importFiles(fl,null)});
+}
+function renderProject(pid,P){
+  if(!$("list")){
+    var link=location.href.split("#")[0]+"#j"+pid+"."+(P.token||"");
+    $("app").innerHTML='<div class="row" style="margin-bottom:12px">'+(owner?'<button id="back">← Alle projecten</button>':'')+'</div><h2 id="ptitle"></h2>'+
+    (owner?'<section class="panel"><div class="row"><input type="text" id="lnk" class="grow" readonly value="'+esc(link)+'" aria-label="Deellink voor collega\'s"><button id="cplnk">Kopieer deellink</button></div><div id="mem" class="mut" style="margin-top:8px"></div></section>':'<p class="mut">Jij scant en vinkt af. De beheerder bevestigt daarna zelf.</p>')+
+    '<section class="panel"><div class="row"><input type="text" id="code" class="grow" placeholder="Scan of typ artikelnummer, druk op Enter" autocomplete="off"><button class="pri" id="cam">QR-code scannen</button></div>'+
+    '<div id="camwrap" class="hide" style="margin-top:10px"><video id="vid" playsinline muted></video><div class="row" style="margin-top:8px"><button id="camstop">Camera sluiten</button><span class="mut" id="camnote"></span></div></div></section>'+
+    '<section class="panel"><div class="bar"><i class="b1" id="f1"></i><i class="b2" id="f2"></i></div><div class="stat"><span id="cnt"></span><span id="wt"></span></div>'+
+    '<div class="row" style="margin:12px 0"><input type="search" id="q" class="grow" placeholder="Zoek in lijst"><select id="lst" class="hide" aria-label="Filter op retourlijst"></select><button id="fAll">Alles</button><button id="fOpen">Open</button><button id="fDone">Afgevinkt</button></div><ul id="list"></ul></section>'+
+    (owner?'<section class="panel"><div class="row"><label class="btn">Retourlijst toevoegen<input type="file" id="addpdf" accept="application/pdf" multiple></label><button id="stay">Rest laten staan</button><button id="unstay" class="hide">Laten staan ongedaan maken</button><button id="ov">Overzicht extra en blijft staan</button></div><div id="ovbox"></div></section>':'');
+    if(owner){$("back").onclick=function(){stopCam();location.hash=""};
+      $("cplnk").onclick=function(){var i=$("lnk");i.select();try{navigator.clipboard.writeText(i.value).then(function(){toast("Link gekopieerd","ok")},function(){toast("Selecteer de link en kopieer handmatig","err")})}catch(e){toast("Selecteer de link en kopieer handmatig","err")}};
+      $("addpdf").addEventListener("change",function(e){var fl=Array.prototype.slice.call(e.target.files);e.target.value="";importFiles(fl,pid)});
+      $("stay").onclick=function(){stayRest(pid,false)};$("unstay").onclick=function(){stayRest(pid,true)};$("ov").onclick=function(){ovOpen=!ovOpen;render()}}
+    $("code").addEventListener("keydown",function(e){if(e.key==="Enter"){scan(this.value);this.value=""}});
+    $("cam").onclick=startCam;$("camstop").onclick=stopCam;
+    $("q").addEventListener("input",function(){q=norm(this.value);render()});
+    $("lst").addEventListener("change",function(){listF=this.value;render()});
+    [["fAll","all"],["fOpen","open"],["fDone","done"]].forEach(function(f){$(f[0]).onclick=function(){filter=f[1];render()}});
+    $("list").addEventListener("click",function(e){
+      var sp=e.target.getAttribute("data-step");
+      if(sp){var a=sp.split("|"),it2=cur.P.items.find(function(i){return i.id===a[0]});
+        setCount(pid,a[0],Math.max(0,Math.min(it2.qty,me(pid,a[0])+parseInt(a[1],10))));return}
+      var id=e.target.getAttribute("data-id");if(id===null)return;
+      var it=cur.P.items.find(function(i){return i.id===id});setCount(pid,id,e.target.checked?it.qty:0)});
+  }
+  $("ptitle").textContent=P.title;
+  var fs2={fAll:"all",fOpen:"open",fDone:"done"};Object.keys(fs2).forEach(function(b){$(b).classList.toggle("pri",fs2[b]===filter)});
+  var LN=listNames(P),multi=LN.length>1,sel=$("lst"),sig=LN.join("|");
+  sel.classList.toggle("hide",!multi);
+  if(sel.getAttribute("data-sig")!==sig){sel.innerHTML='<option value="">Alle lijsten</option>'+LN.map(function(n){return'<option value="'+esc(n)+'">'+esc(n)+'</option>'}).join("");sel.setAttribute("data-sig",sig)}
+  if(LN.indexOf(listF)<0)listF="";sel.value=listF;
+  var done=0,wait=0,stayN=0,h="";
+  P.items.forEach(function(it){
+    if(listF&&it.list!==listF)return;
+    var mine=me(pid,it.id),oth=others(pid,it.id),conf=(P.done&&P.done[it.id]||0)>=it.qty;
+    var mineDone=mine>=it.qty,collDone=oth.some(function(o){return o.n>=it.qty});
+    if(mineDone)done++;else if(owner&&collDone)wait++;
+    var isDone=mineDone,isWait=owner&&!mineDone&&collDone;
+    if(filter==="open"&&isDone)return;if(filter==="done"&&!isDone)return;
+    if(q&&norm(it.code+it.desc+it.desc2+it.list).indexOf(q)<0)return;
+    var tags="";
+    oth.forEach(function(o){tags+='<span class="tag">'+esc(nameOf(o.u))+" "+Math.min(o.n,it.qty)+"/"+it.qty+(o.n>=it.qty?" ✓":"")+'</span>'});
+    if(!owner&&conf)tags+='<span class="tag ok">Bevestigd door beheerder</span>';
+    var st=(P.stay&&P.stay[it.id])||0;if(st>0&&!mineDone){stayN++;tags+='<span class="tag stay">Blijft staan: '+Math.min(st,it.qty-mine)+'×</span>'}
+    if(owner)Object.keys(marks).forEach(function(u){var n=overOf(u,it.id);if(n>0)tags+='<div class="tag bad">'+esc(nameOf(u))+': '+n+' te veel gescand<br><button class="sm" data-ov="'+u+'|'+it.id+'|back">Zet terug</button><button class="sm" data-ov="'+u+'|'+it.id+'|extra">Gaat extra retour</button></div>'});
+    var sub=[it.desc,it.desc2].filter(Boolean).join(" · ");if(multi&&it.list)sub+=" · lijst "+it.list;
+    h+='<li class="it'+(isDone?" done":isWait?" wait":(st>0?" stay":""))+'" id="it'+it.id+'"><input type="checkbox" data-id="'+it.id+'" aria-label="Afvinken"'+(mineDone?" checked":"")+'><div class="t"><div class="c">'+esc(it.code)+'</div><div class="d">'+esc(sub)+(it.loc?" · schap "+esc(it.loc):"")+'</div>'+(it.note?'<div class="n">'+esc(it.note)+'</div>':"")+tags+'</div>'+
+      (it.qty>1?'<div class="qty step"><button class="sm" data-step="'+it.id+'|-1" aria-label="Eén minder"'+(mine<=0?' disabled':'')+'>−</button><span>'+Math.min(mine,it.qty)+'/'+it.qty+'</span><button class="sm" data-step="'+it.id+'|1" aria-label="Eén meer"'+(mine>=it.qty?' disabled':'')+'>+</button></div>':"")+'</li>'});
+  $("list").innerHTML=h||'<li class="mut" style="padding:12px 4px">Niets gevonden met dit filter.</li>';
+  var shown=P.items.filter(function(i){return!listF||i.list===listF}).length,tot=shown||1;
+  $("f1").style.width=done/tot*100+"%";$("f2").style.width=wait/tot*100+"%";
+  $("cnt").textContent=done+" van "+shown+(owner?" bevestigd":" afgevinkt")+(listF?" (lijst "+listF+")":"");
+  var parts=[];if(owner&&wait)parts.push(wait+" door collega’s gescand, nog bevestigen");if(stayN)parts.push(stayN+" blijven staan");$("wt").textContent=parts.join(" · ");
+  if(owner){
+    $("unstay").classList.toggle("hide",!(P.stay&&Object.keys(P.stay).length));
+    var mu=Object.keys(members);
+    $("mem").innerHTML=mu.length?'Collega’s met toegang: '+mu.map(function(u){return esc(members[u].name)+' <button class="x" data-delm="'+u+'" aria-label="Toegang van '+esc(members[u].name)+' intrekken">✕</button>'}).join(" "):"Nog geen collega’s toegevoegd. Stuur ze de deellink.";
+    renderOv(pid,P)}
+}
+
+/* ---------- Scannen ---------- */
+var lastScan="",lastT=0,stream=null,tmr=0,reader=null;
+function scan(raw){
+  var v=norm(raw),pid=curPid(),P=getP(pid);if(!v||!P)return;
+  if(document.querySelector(".modal"))return;var now=Date.now();if(v===lastScan&&now-lastT<1500)return;lastScan=v;lastT=now;
+  var open=P.items.filter(function(i){return me(pid,i.id)<i.qty});
+  var hit=open.find(function(i){return norm(i.code)===v})||open.find(function(i){return v.indexOf(norm(i.code))>-1});
+  if(hit){var n=me(pid,hit.id)+1;setCount(pid,hit.id,n);
+    var el=$("it"+hit.id);if(el){el.classList.add("flash");el.scrollIntoView({block:"center",behavior:"smooth"});setTimeout(function(){el.classList.remove("flash")},1200)}
+    toast("✓ "+hit.code+" "+hit.desc+(hit.qty>1?" ("+n+"/"+hit.qty+")":""),"ok");
+    if(navigator.vibrate)try{navigator.vibrate(60)}catch(e){}
+  }else{
+    var k=P.items.find(function(i){return norm(i.code)===v})||P.items.find(function(i){return v.indexOf(norm(i.code))>-1});
+    if(k){
+      var nm=k.code+" "+k.desc;
+      if(owner)modal("Te veel gescand",nm+" is al "+k.qty+"× afgevinkt. Dit is er één te veel.",[{t:"Zet terug",fn:function(){toast("Teruggezet, niet meegeteld","ok")}},{t:"Gaat extra retour",pri:true,fn:function(){addExtra(pid,norm(k.code),k.code,k.desc,1);toast("Genoteerd als extra retour","ok")}}]);
+      else{modal("Te veel gescand",nm+" is al "+k.qty+"× gescand. Deze scan is niet meegeteld. De hoofdgebruiker beslist wat ermee gebeurt.",[{t:"Begrepen",pri:true}]);setOver(mid,pid,k.id,overOf(mid,k.id)+1)}
+    }else if(owner){
+      modal("Niet op de lijst",raw+" staat niet op deze retourlijst.",[{t:"Negeren"},{t:"Gaat extra retour",pri:true,fn:function(){addExtra(pid,norm(raw),raw,"Niet op de lijst",1);toast("Genoteerd als extra retour","ok")}}]);
+    }else toast("Niet op de lijst: "+raw,"err")}
+}
+async function startCam(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
+    var v=$("vid");v.srcObject=stream;await v.play();$("camwrap").classList.remove("hide");$("camnote").textContent="Houd de QR-code in beeld";
+    if("BarcodeDetector" in window){var det;try{det=new BarcodeDetector({formats:["qr_code"]})}catch(e){det=new BarcodeDetector()}
+      (function loop(){if(!stream)return;det.detect(v).then(function(r){if(r.length)scan(r[0].rawValue)}).catch(function(){}).then(function(){tmr=setTimeout(loop,250)})})();
+    }else if(window.ZXing){reader=new ZXing.BrowserMultiFormatReader();reader.decodeFromVideoElement(v,function(res){if(res)scan(res.getText())})}
+    else $("camnote").textContent="Scannen niet ondersteund; typ de code."
+  }catch(e){console.error("camera:",e&&e.name,e&&e.message);stopCam();
+    var n=e&&e.name,msg=n==="NotAllowedError"?"Camera geweigerd. Sta de camera toe in de instellingen van je browser voor deze site.":n==="NotFoundError"?"Geen camera gevonden op dit apparaat.":n==="NotReadableError"?"De camera wordt al door een andere app gebruikt.":"Camera starten mislukt.";
+    toast(msg,"err")}
+}
+function stopCam(){
+  clearTimeout(tmr);if(reader){try{reader.reset()}catch(e){}reader=null}
+  if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null}
+  var c=$("camwrap");if(c)c.classList.add("hide")}
+
+/* ---------- Inloggen, laden en routes ---------- */
+function showLogin(msg){
+  $("who").textContent="Beheerder: log in. Collega: open de link die je hebt gekregen.";
+  $("app").innerHTML='<section class="panel"><form class="form" id="lf"><label class="l" for="pw">Beheerderswachtwoord</label><input type="password" id="pw" autocomplete="current-password" required><button class="pri" type="submit">Inloggen</button></form></section>';
+  if(msg)toast(msg,"err");
+  $("lf").onsubmit=function(e){e.preventDefault();var p=$("pw").value;pw=p;owner=true;
+    api("login").then(function(){store("retourPw",p);go()}).catch(function(err){owner=false;pw="";console.error(err);toast(err.message==="auth"?"Verkeerd wachtwoord.":errText(err),"err")})}}
+function showName(r){
+  $("who").textContent="Je bent uitgenodigd om mee te scannen.";
+  $("app").innerHTML='<section class="panel"><form class="form" id="nf"><label class="l" for="nm">Jouw naam</label><input type="text" id="nm" autocomplete="name" required value="'+esc(load_("retourName"))+'"><p class="mut" style="margin:0">De beheerder ziet bij elk artikel wie het gescand heeft.</p><button class="pri" type="submit">Doorgaan</button></form></section>';
+  $("nf").onsubmit=function(e){e.preventDefault();var n=$("nm").value.trim();if(!n)return;store("retourName",n);
+    api("join",{pid:r.pid,token:r.token,name:n},true).then(function(j){mid=j.mid;store("mid_"+r.pid,mid);go()}).catch(function(){toast("Deze link werkt niet (meer). Vraag de beheerder om een nieuwe.","err")})}}
+function applyState(j){
+  var P={title:j.project.title,token:j.project.token,items:j.items,done:j.done||{},extra:j.extra||{},stay:j.stay||{}};
+  cur={pid:j.project.id,P:P};members=j.members||{};
+  if(owner){marks=j.marks||{};myMarks={}}else{marks={};myMarks=(j.marks&&j.marks[mid])||{}}
+  lastV=j.v;ready=true;render()}
+function handleErr(e){
+  console.error(e);var r=parseRoute();
+  if(e&&e.message==="auth"){
+    if(owner){owner=false;pw="";store("retourPw",null);$("out").classList.add("hide");return showLogin("Wachtwoord klopt niet meer. Log opnieuw in.")}
+    store("mid_"+r.pid,null);mid="";$("app").innerHTML='<div class="panel"><p>Deze link is niet meer geldig of je toegang is ingetrokken. Vraag de beheerder om een nieuwe link.</p></div>';return}
+  toast(errText(e),"err")}
+async function load(){
+  var r=parseRoute();
+  try{
+    if(owner&&r.k!=="owner"){var j=await api("list");plist=j.projects;lastV=j.v;ready=true;render()}
+    else if(r.pid){applyState(await api("state",{pid:r.pid}))}
+  }catch(e){handleErr(e)}}
+function go(){
+  stopCam();cur=null;marks={};members={};myMarks={};lastV="";ready=false;$("app").innerHTML="";
+  var r=parseRoute();
+  $("out").classList.toggle("hide",!owner);
+  if(!owner){
+    if(r.k==="join"){mid=load_("mid_"+r.pid);if(!mid)return showName(r);
+      $("who").textContent="Je bent ingelogd als collega. Jouw scans zijn zichtbaar voor de beheerder.";return load()}
+    return showLogin()}
+  $("who").textContent="Je bent de hoofdgebruiker. Alleen jouw vinkjes tellen als bevestigd.";
+  if(r.k==="join"){location.hash="#p"+r.pid;return}
+  load()}
+
+document.addEventListener("click",function(e){
+  var t=e.target;if(!t.getAttribute)return;
+  var ov=t.getAttribute("data-ov");if(ov){var a=ov.split("|");resolveOver(a[0],a[1],a[2]);return}
+  var dm=t.getAttribute("data-delm");if(dm){if(confirm("Toegang van deze collega intrekken?")){delete members[dm];render();w("removeMember",{pid:curPid(),mid:dm})}return}
+  var d=t.getAttribute("data-delp");
+  if(d){e.stopPropagation();if(confirm("Project en alle afvinkingen verwijderen?")){plist=plist.filter(function(p){return p.id!==d});render();w("deleteProject",{pid:d})}return}
+  var o=t.closest&&t.closest("[data-open]");if(o)location.hash="#p"+o.getAttribute("data-open")});
+window.addEventListener("hashchange",go);
+$("out").onclick=function(){owner=false;pw="";store("retourPw",null);go()};
+
+/* Elke 6 seconden kijken of er iets veranderd is (alleen als de pagina zichtbaar is). */
+setInterval(function(){
+  if(document.hidden||pending>0||!ready)return;
+  var r=parseRoute(),key=(owner&&r.k!=="owner")?"_all":r.pid;if(!key)return;
+  api("version",{key:key},true).then(function(j){if(j.v!==lastV&&pending===0)load()}).catch(function(){})},6000);
+
+/* Start: onthouden beheerder automatisch inloggen */
+pw=load_("retourPw");
+if(pw){owner=true;api("login").then(go).catch(function(e){owner=false;pw="";if(e&&e.message==="auth")store("retourPw",null);go()})}
+else go();
+})();
+</script>
+</body>
+</html>
