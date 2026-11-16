@@ -44,7 +44,8 @@ li.it{display:flex;gap:12px;align-items:center;padding:12px 6px;border-bottom:1p
 li.it:last-child{border-bottom:0}
 li.it input{width:26px;height:26px;flex:none;accent-color:var(--ok)}
 li.it .t{flex:1;min-width:0}
-li.it .c{font-weight:600;word-break:break-all}
+li.it .c{font-weight:800;font-size:1.02rem;word-break:break-word}
+li.it .d2{color:var(--ink);font-size:.9rem}
 li.it .d{color:var(--mut);font-size:.9rem}
 li.it .n{font-size:.85rem;color:var(--wait)}
 li.it.done{background:var(--okbg)}
@@ -66,6 +67,8 @@ li.it.flash{outline:3px solid var(--acc)}
 #toast.err{display:block;background:var(--panel);color:var(--bad);border:1px solid var(--bad)}
 video{width:100%;border-radius:8px;background:#000;max-height:50vh;object-fit:cover}
 .hide{display:none}
+#top{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:15;width:52px;height:52px;border-radius:26px;background:var(--brand);color:#fff;border:2px solid var(--brand2);font-size:1.4rem;justify-content:center;padding:0;box-shadow:0 3px 10px rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .2s}
+#top.show{opacity:1;pointer-events:auto}
 input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
 .modal .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;max-width:420px;width:100%}
@@ -87,12 +90,14 @@ summary{cursor:pointer;font-weight:600}
 </head>
 <body>
 <header class="brand"><div class="in"><img id="logo" src="logo.png" alt="NEP The Netherlands"><div class="tt"><h1>Retour<b>i</b></h1><div class="co">NEP The Netherlands</div><p class="sub" id="who">Laden…</p></div><button id="out" class="hide">Uitloggen</button></div></header>
+<button id="top" aria-label="Naar boven" type="button">↑</button>
 <main>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="app"></div>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
@@ -192,12 +197,52 @@ function lists(pid,P){
   var stay=P.items.filter(function(i){return(P.stay&&P.stay[i.id]||0)>0&&me(pid,i.id)<i.qty}).map(function(i){return{code:i.code,desc:i.desc,list:i.list||"",n:Math.min(P.stay[i.id],i.qty-me(pid,i.id))}});
   return{extra:extra,stay:stay}}
 function csv(L){var r=["Soort;Lijst;Artikelnr;Omschrijving;Aantal"];L.extra.forEach(function(x){r.push(["Extra retour","",x.code,x.desc,x.n].join(";"))});L.stay.forEach(function(x){r.push(["Blijft staan",x.list,x.code,x.desc,x.n].join(";"))});return r.join("\n")}
+function makePdf(pid,P,L){
+  var J=window.jspdf&&window.jspdf.jsPDF;
+  if(!J){toast("PDF-maker kon niet laden. Controleer je internet en probeer opnieuw.","err");return}
+  try{
+    var d=new J({unit:"mm",format:"a4"}),W=210,M=14,y=0,pg=1;
+    var dt=new Date(),ds=dt.toLocaleDateString("nl-NL",{day:"numeric",month:"long",year:"numeric"})+" "+dt.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
+    function head(first){
+      d.setFillColor(6,34,74);d.rect(0,0,W,first?34:14,"F");d.setFillColor(0,163,224);d.rect(0,first?34:14,W,1.6,"F");
+      d.setTextColor(255,255,255);
+      if(first){d.setFont("helvetica","bold");d.setFontSize(22);d.text("Retouri",M,16);d.setFont("helvetica","normal");d.setFontSize(9);d.text("NEP THE NETHERLANDS",M,22);
+        d.setFontSize(10);d.text("Overzicht extra en blijft staan",M,29);d.text(ds,W-M,29,{align:"right"});y=44}
+      else{d.setFont("helvetica","bold");d.setFontSize(10);d.text("Retouri  |  "+P.title,M,9);y=24}}
+    function foot(){d.setFontSize(8);d.setTextColor(120,130,145);d.setFont("helvetica","normal");d.text("Pagina "+pg,W-M,290,{align:"right"});d.text("Retouri",M,290)}
+    function np(){foot();d.addPage();pg++;head(false)}
+    head(true);
+    d.setTextColor(11,29,51);d.setFont("helvetica","bold");d.setFontSize(13);
+    d.text(d.splitTextToSize("Project: "+P.title,W-2*M),M,y);y+=9;
+    function sect(title,rows,showList){
+      if(y>250)np();
+      d.setFont("helvetica","bold");d.setFontSize(12);d.setTextColor(6,34,74);d.text(title+" ("+rows.length+")",M,y);
+      d.setDrawColor(0,163,224);d.setLineWidth(.6);d.line(M,y+1.8,W-M,y+1.8);y+=8;
+      if(!rows.length){d.setFont("helvetica","italic");d.setFontSize(10);d.setTextColor(110,120,135);d.text("Geen.",M,y);y+=10;return}
+      d.setFillColor(232,238,246);d.rect(M,y-4.6,W-2*M,6.6,"F");
+      d.setFont("helvetica","bold");d.setFontSize(9);d.setTextColor(6,34,74);
+      d.text("Aantal",M+2,y);d.text("Artikelnr",M+22,y);d.text("Omschrijving",M+62,y);y+=6;
+      var tot=0;
+      rows.forEach(function(x,k){
+        var desc=d.splitTextToSize(String(x.desc||"")+(showList&&x.list?"  (lijst "+x.list+")":""),W-M-(M+62)-2);
+        var h=Math.max(6,desc.length*4.6+2);
+        if(y+h>278){np()}
+        if(k%2===0){d.setFillColor(247,249,252);d.rect(M,y-4.2,W-2*M,h,"F")}
+        d.setFont("helvetica","bold");d.setFontSize(10);d.setTextColor(11,29,51);d.text(x.n+"x",M+2,y);
+        d.setFont("helvetica","normal");d.text(String(x.code),M+22,y);
+        d.setFontSize(9.5);d.text(desc,M+62,y);y+=h;tot+=x.n});
+      d.setFont("helvetica","bold");d.setFontSize(10);d.setTextColor(6,34,74);d.text("Totaal: "+tot+" stuks",W-M,y+1,{align:"right"});y+=12}
+    sect("Extra retour",L.extra,false);
+    sect("Blijft staan",L.stay,true);
+    foot();
+    d.save("Retouri-overzicht-"+(P.title||"project").replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"")+".pdf");
+  }catch(e){console.error(e);toast("PDF maken mislukt","err")}}
 function renderOv(pid,P){
   var b=$("ovbox");if(!b)return;if(!ovOpen){b.innerHTML="";return}
   var L=lists(pid,P);
   function tbl(t,a){return'<h2 style="margin-top:14px">'+t+' ('+a.length+')</h2>'+(a.length?'<table class="ov">'+a.map(function(x){return'<tr><td>'+esc(x.code)+'</td><td>'+esc(x.desc)+'</td><td><b>'+x.n+'×</b></td></tr>'}).join("")+'</table>':'<p class="mut">Geen.</p>')}
-  b.innerHTML=tbl("Extra retour",L.extra)+tbl("Blijft staan",L.stay)+'<div class="btns"><button id="ovsave">Opslaan als bestand</button><button id="ovcopy">Kopiëren</button></div>';
-  $("ovsave").onclick=function(){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["\ufeff"+csv(L)],{type:"text/csv"}));a.download="retour-overzicht.csv";document.body.appendChild(a);a.click();a.remove()};
+  b.innerHTML=tbl("Extra retour",L.extra)+tbl("Blijft staan",L.stay)+'<div class="btns"><button class="pri" id="ovsave">Download als PDF</button><button id="ovcopy">Kopiëren</button></div>';
+  $("ovsave").onclick=function(){makePdf(pid,P,L)};
   $("ovcopy").onclick=function(){try{navigator.clipboard.writeText(csv(L)).then(function(){toast("Overzicht gekopieerd","ok")},function(){toast("Kopiëren geblokkeerd","err")})}catch(e){toast("Kopiëren geblokkeerd","err")}}}
 
 /* ---------- PDF ---------- */
@@ -322,8 +367,8 @@ function renderProject(pid,P){
     if(!owner&&conf)tags+='<span class="tag ok">Bevestigd door beheerder</span>';
     var st=(P.stay&&P.stay[it.id])||0;if(st>0&&!mineDone){stayN++;tags+='<span class="tag stay">Blijft staan: '+Math.min(st,it.qty-mine)+'×</span>'}
     if(owner)Object.keys(marks).forEach(function(u){var n=overOf(u,it.id);if(n>0)tags+='<div class="tag bad">'+esc(nameOf(u))+': '+n+' te veel gescand<br><button class="sm" data-ov="'+u+'|'+it.id+'|back">Zet terug</button><button class="sm" data-ov="'+u+'|'+it.id+'|extra">Gaat extra retour</button></div>'});
-    var sub=[it.desc,it.desc2].filter(Boolean).join(" · ");if(multi&&it.list)sub+=" · lijst "+it.list;
-    h+='<li class="it'+(isDone?" done":isWait?" wait":(st>0?" stay":""))+'" id="it'+it.id+'"><input type="checkbox" data-id="'+it.id+'" aria-label="Afvinken"'+(mineDone?" checked":"")+'><div class="t"><div class="c">'+esc(it.code)+'</div><div class="d">'+esc(sub)+(it.loc?" · schap "+esc(it.loc):"")+'</div>'+(it.note?'<div class="n">'+esc(it.note)+'</div>':"")+tags+'</div>'+
+    var sub="Artikelnr "+it.code;if(multi&&it.list)sub+=" · lijst "+it.list;
+    h+='<li class="it'+(isDone?" done":isWait?" wait":(st>0?" stay":""))+'" id="it'+it.id+'"><input type="checkbox" data-id="'+it.id+'" aria-label="Afvinken"'+(mineDone?" checked":"")+'><div class="t"><div class="c">'+esc(it.desc||it.code)+'</div>'+(it.desc2?'<div class="d2">'+esc(it.desc2)+'</div>':'')+'<div class="d">'+esc(sub)+'</div>'+(it.note?'<div class="n">'+esc(it.note)+'</div>':"")+tags+'</div>'+
       (it.qty>1?'<div class="qty step"><button class="sm" data-step="'+it.id+'|-1" aria-label="Eén minder"'+(mine<=0?' disabled':'')+'>−</button><span>'+Math.min(mine,it.qty)+'/'+it.qty+'</span><button class="sm" data-step="'+it.id+'|1" aria-label="Eén meer"'+(mine>=it.qty?' disabled':'')+'>+</button></div>':"")+'</li>'});
   $("list").innerHTML=h||'<li class="mut" style="padding:12px 4px">Niets gevonden met dit filter.</li>';
   var shown=P.items.filter(function(i){return!listF||i.list===listF}).length,tot=shown||1;
@@ -379,7 +424,7 @@ function idxFor(P){if(idxC&&idxC.items===P.items&&idxC.len===P.items.length)retu
   idxC={items:P.items,len:P.items.length,byCode:by,list:list};return idxC}
 function scan(raw){
   var v=norm(raw),pid=curPid(),P=getP(pid);if(!v||!P)return;
-  if(document.querySelector(".modal"))return;var now=Date.now();if(v===lastScan&&now-lastT<1100)return;lastScan=v;lastT=now;
+  if(document.querySelector(".modal"))return;var now=Date.now();if(v===lastScan&&now-lastT<1100)return;lastScan=v;lastT=now;stopCam();
   var ix=idxFor(P),hit=null,i0,L=ix.byCode[v];
   if(L)for(i0=0;i0<L.length;i0++)if(me(pid,L[i0].id)<L[i0].qty){hit=L[i0];break}
   if(!hit){for(i0=0;i0<ix.list.length;i0++){var c=ix.list[i0];if(me(pid,c.id)<c.qty&&v.indexOf(c.n)>-1){hit=c;break}}}
@@ -513,6 +558,8 @@ document.addEventListener("change",function(e){
   var t=e.target;if(!t.getAttribute||!(t.hasAttribute("data-role")||t.hasAttribute("data-perm")))return;
   var row=t.closest("[data-uid]");if(row)saveRights(row)});
 window.addEventListener("hashchange",go);
+$("top").onclick=function(){window.scrollTo({top:0,behavior:"smooth"})};
+window.addEventListener("scroll",function(){$("top").classList.toggle("show",(window.pageYOffset||document.documentElement.scrollTop)>300)},{passive:true});
 $("out").onclick=function(){clearAuth();go()};
 
 /* Elke 6 seconden kijken of er iets veranderd is (alleen als de pagina zichtbaar is). */
