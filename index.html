@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Retouri</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap">
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap" media="print" onload="this.media='all'">
 <style>
 :root{--bg:#eef2f7;--panel:#fff;--ink:#0b1d33;--mut:#566679;--line:#d5dde7;--acc:#0a4fd6;--acc-ink:#fff;--brand:#06224a;--brand2:#00a3e0;--ok:#0f8a4b;--okbg:#e2f5ea;--wait:#8a5a00;--waitbg:#fff1d2;--bad:#c62828}
 @media (prefers-color-scheme:dark){:root{--bg:#0b131d;--panel:#14202e;--ink:#e8eef3;--mut:#93a1ae;--line:#26354a;--acc:#4da3ff;--acc-ink:#04101f;--brand:#041326;--brand2:#2cb8ee;--ok:#46d489;--okbg:#14301f;--wait:#ffcf66;--waitbg:#3a2d0c;--bad:#ff7b7b}}
@@ -96,10 +98,6 @@ summary{cursor:pointer;font-weight:600}
 <div id="app"></div>
 </main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
 (function(){var n=["logo.png","LOGO-NEP.png","LOGO-NEP.PNG","logo-nep.png","Logo.png","logo.PNG","logo.jpg","logo.jpeg","logo.JPG","logo.svg","logo.webp","nep-logo.png","NEP.png","nep.png"],i=0,im=document.getElementById("logo");
   if(!im)return;im.onerror=function(){i++;if(i<n.length)im.src=n[i]+"?v=2";else im.remove()};im.src=n[0]+"?v=2"})();
@@ -108,6 +106,10 @@ var API_URL="https://script.google.com/macros/s/AKfycbxTRTePUvdtyvWWLOXaprklpm3C
 /* ====================================== */
 (function(){
 var $=function(i){return document.getElementById(i)};
+/* Zware onderdelen worden pas geladen als ze nodig zijn: dat maakt de start veel sneller. */
+var LIBS={pdf:"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",jspdf:"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js",jsqr:"https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js",zxing:"https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"},LP={};
+function lib(n){if(LP[n])return LP[n];return LP[n]=new Promise(function(ok,no){var e=document.createElement("script");e.src=LIBS[n];e.onload=ok;e.onerror=function(){delete LP[n];no(new Error("lib "+n))};document.head.appendChild(e)})}
+function idle(f){(window.requestIdleCallback||function(g){setTimeout(g,1500)})(f)}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function norm(s){return String(s||"").toLowerCase().replace(/[^a-z0-9]/g,"")}
 var tt;function toast(t,k){var e=$("toast");e.textContent=t;e.className=k;clearTimeout(tt);tt=setTimeout(function(){e.className=""},3500)}
@@ -128,7 +130,11 @@ function setMe(m){
   my=m;owner=m.role==="beheerder";store("retourMe",JSON.stringify(m));
   var s=JSON.stringify(m);if(s!==meSig){if(meSig)$("app").innerHTML="";meSig=s}
   whoText()}
-function clearAuth(){acct=false;owner=false;my={role:"",perms:{}};uid="";sess="";mid="";meSig="";lastInvite=null;
+function ck(n){return"retourC_"+(acct?uid:mid)+"_"+n}
+function cset(n,v){try{localStorage.setItem(ck(n),JSON.stringify(v))}catch(e){try{cwipe()}catch(x){}}}
+function cget(n){try{var t=localStorage.getItem(ck(n));return t?JSON.parse(t):null}catch(e){return null}}
+function cwipe(){try{Object.keys(localStorage).forEach(function(k){if(k.indexOf("retourC_")===0)localStorage.removeItem(k)})}catch(e){}}
+function clearAuth(){cwipe();acct=false;owner=false;my={role:"",perms:{}};uid="";sess="";mid="";meSig="";lastInvite=null;
   ["retourUid","retourSess","retourMe","retourAcctName"].forEach(function(k){store(k,null)})}
 function onLogin(j){
   acct=true;uid=j.uid;sess=j.session;mid="u_"+uid;store("retourUid",uid);store("retourSess",sess);store("retourAcctName",j.name);
@@ -172,7 +178,7 @@ function setOver(u,pid,id,n){
   else{myMarks.over=myMarks.over||{};myMarks.over[id]=n}
   render();return w("setOver",{pid:pid,item:id,mid:u,n:n})}
 function addExtra(pid,key,code,desc,n){key=key||"onbekend";var P=cur.P;P.extra=P.extra||{};
-  var c=(P.extra[key]&&P.extra[key].n)||0;P.extra[key]={code:code,desc:desc,n:c+n};
+  var c=(P.extra[key]&&P.extra[key].n)||0;P.extra[key]={code:code,desc:desc,n:Math.max(0,c+n)};
   render();return w("addExtra",{pid:pid,key:key,code:code,desc:desc,n:n})}
 function resolveOver(u,id,act){var pid=curPid(),P=cur.P,it=P.items.find(function(i){return i.id===id}),n=overOf(u,id);
   if(act==="extra")addExtra(pid,norm(it.code),it.code,it.desc,n);setOver(u,pid,id,0)}
@@ -193,11 +199,12 @@ function stayRest(pid,undo){
   if(!c)return toast("Alles is al afgevinkt","ok");
   modal("Rest laten staan?",c+" artikelen ("+u+" stuks) zijn niet afgevinkt en blijven staan. Je kunt dit later ongedaan maken.",[{t:"Annuleren"},{t:"Laten staan",pri:true,fn:go}])}
 function lists(pid,P){
-  var extra=Object.keys(P.extra||{}).map(function(k){return P.extra[k]}).filter(function(x){return x.n>0});
+  var extra=Object.keys(P.extra||{}).map(function(k){var x=P.extra[k];return{key:k,code:x.code,desc:x.desc,n:x.n}}).filter(function(x){return x.n>0});
   var stay=P.items.filter(function(i){return(P.stay&&P.stay[i.id]||0)>0&&me(pid,i.id)<i.qty}).map(function(i){return{code:i.code,desc:i.desc,list:i.list||"",n:Math.min(P.stay[i.id],i.qty-me(pid,i.id))}});
   return{extra:extra,stay:stay}}
 function csv(L){var r=["Soort;Lijst;Artikelnr;Omschrijving;Aantal"];L.extra.forEach(function(x){r.push(["Extra retour","",x.code,x.desc,x.n].join(";"))});L.stay.forEach(function(x){r.push(["Blijft staan",x.list,x.code,x.desc,x.n].join(";"))});return r.join("\n")}
-function makePdf(pid,P,L){
+function makePdf(pid,P,L){lib("jspdf").then(function(){makePdf_(pid,P,L)},function(){toast("PDF-maker kon niet laden. Controleer je internet en probeer opnieuw.","err")})}
+function makePdf_(pid,P,L){
   var J=window.jspdf&&window.jspdf.jsPDF;
   if(!J){toast("PDF-maker kon niet laden. Controleer je internet en probeer opnieuw.","err");return}
   try{
@@ -240,8 +247,8 @@ function makePdf(pid,P,L){
 function renderOv(pid,P){
   var b=$("ovbox");if(!b)return;if(!ovOpen){b.innerHTML="";return}
   var L=lists(pid,P);
-  function tbl(t,a){return'<h2 style="margin-top:14px">'+t+' ('+a.length+')</h2>'+(a.length?'<table class="ov">'+a.map(function(x){return'<tr><td>'+esc(x.code)+'</td><td>'+esc(x.desc)+'</td><td><b>'+x.n+'×</b></td></tr>'}).join("")+'</table>':'<p class="mut">Geen.</p>')}
-  b.innerHTML=tbl("Extra retour",L.extra)+tbl("Blijft staan",L.stay)+'<div class="btns"><button class="pri" id="ovsave">Download als PDF</button><button id="ovcopy">Kopiëren</button></div>';
+  function tbl(t,a,ed){return'<h2 style="margin-top:14px">'+t+' ('+a.length+')</h2>'+(a.length?'<table class="ov">'+a.map(function(x){return'<tr><td>'+esc(x.code)+'</td><td>'+esc(x.desc)+'</td><td><b>'+x.n+'×</b></td>'+(ed?'<td style="white-space:nowrap"><button class="sm" data-xdec="'+esc(x.key)+'" aria-label="Eén minder">−1</button><button class="sm" data-xdel="'+esc(x.key)+'" aria-label="Verwijderen">Verwijder</button></td>':'')+'</tr>'}).join("")+'</table>':'<p class="mut">Geen.</p>')}
+  b.innerHTML=tbl("Extra retour",L.extra,true)+tbl("Blijft staan",L.stay)+'<div class="btns"><button class="pri" id="ovsave">Download als PDF</button><button id="ovcopy">Kopiëren</button></div>';
   $("ovsave").onclick=function(){makePdf(pid,P,L)};
   $("ovcopy").onclick=function(){try{navigator.clipboard.writeText(csv(L)).then(function(){toast("Overzicht gekopieerd","ok")},function(){toast("Kopiëren geblokkeerd","err")})}catch(e){toast("Kopiëren geblokkeerd","err")}}}
 
@@ -265,6 +272,7 @@ function parseRows(rows){
   return{items:items,title:(nr?nr+" · ":"")+(name||"Retourlijst")}
 }
 async function parseFile(file){
+  await lib("pdf");
   pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   var doc=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise,rows=[];
   for(var p=1;p<=doc.numPages;p++){
@@ -348,6 +356,7 @@ function renderProject(pid,P){
       var it=cur.P.items.find(function(i){return i.id===id});setCount(pid,id,e.target.checked?it.qty:0)});
   }
   $("ptitle").textContent=P.title;
+  if(!("BarcodeDetector" in window))idle(function(){lib("jsqr").catch(function(){})});
   var fs2={fAll:"all",fOpen:"open",fDone:"done"};Object.keys(fs2).forEach(function(b){$(b).classList.toggle("pri",fs2[b]===filter)});
   var LN=listNames(P),multi=LN.length>1,sel=$("lst"),sig=LN.join("|");
   sel.classList.toggle("hide",!multi);
@@ -467,6 +476,8 @@ async function startCam(){
       if(cap&&cap.focusMode&&cap.focusMode.indexOf("continuous")>=0)await tr.applyConstraints({advanced:[{focusMode:"continuous"}]})}catch(e){}
     $("camwrap").classList.remove("hide");$("camnote").textContent="Houd de QR-code in beeld, niet te dichtbij";
     var det=null;if("BarcodeDetector" in window){try{det=new BarcodeDetector({formats:["qr_code"]})}catch(e){try{det=new BarcodeDetector()}catch(e2){det=null}}}
+    if(!det&&!window.jsQR){try{await lib("jsqr")}catch(e){}}
+    if(!det&&!window.jsQR){try{await lib("zxing")}catch(e){}}
     if(!det&&!window.jsQR&&window.ZXing){reader=new ZXing.BrowserQRCodeReader();reader.decodeFromVideoElement(v,function(res){if(res)scan(res.getText())});return}
     if(!det&&!window.jsQR){$("camnote").textContent="Scannen niet ondersteund; typ de code.";return}
     var cv=document.createElement("canvas"),cx=cv.getContext("2d",{willReadFrequently:true});
@@ -485,20 +496,18 @@ function stopCam(){
   var c=$("camwrap");if(c)c.classList.add("hide")}
 
 /* ---------- Inloggen, laden en routes ---------- */
-async function showLogin(msg){
+function showLogin(msg){
   stopCam();$("who").textContent="Log in om te beginnen.";
-  var setup=false,err="";
-  try{setup=(await api("status",{},true)).needsSetup}catch(e){console.error(e);err=errText(e)}
-  if(acct)return; /* ondertussen ingelogd */
-  var h='';
-  if(setup)h+='<section class="panel"><h2>Eerste keer: maak het beheerdersaccount aan</h2><form class="form" id="sf"><label class="l" for="sc">Installatiecode (SETUP_CODE uit het script)</label><input type="password" id="sc" autocomplete="off" required><label class="l" for="sn">Jouw naam</label><input type="text" id="sn" autocomplete="name" required><label class="l" for="su">Gebruikersnaam</label><input type="text" id="su" autocomplete="username" autocapitalize="none" autocorrect="off" required><label class="l" for="sp">Wachtwoord (minimaal 8 tekens)</label><input type="password" id="sp" autocomplete="new-password" minlength="8" required><button class="pri" type="submit">Beheerdersaccount aanmaken</button></form></section>';
-  h+='<section class="panel"><h2>Inloggen</h2><form class="form" id="af"><label class="l" for="un">Gebruikersnaam</label><input type="text" id="un" autocomplete="username" autocapitalize="none" autocorrect="off" required><label class="l" for="pw2">Wachtwoord</label><input type="password" id="pw2" autocomplete="current-password" required><button class="pri" type="submit">Inloggen</button></form></section>';
-  $("app").innerHTML=h;
-  if(msg)toast(msg,"err");else if(err)toast(err,"err");
-  if($("sf"))$("sf").onsubmit=function(e){e.preventDefault();
-    api("setupAdmin",{setupCode:$("sc").value,name:$("sn").value,username:$("su").value,password:$("sp").value},true).then(onLogin).catch(function(er){console.error(er);toast(scriptMsg(er),"err")})};
+  $("app").innerHTML='<div id="setupbox"></div><section class="panel"><h2>Inloggen</h2><form class="form" id="af"><label class="l" for="un">Gebruikersnaam</label><input type="text" id="un" autocomplete="username" autocapitalize="none" autocorrect="off" required><label class="l" for="pw2">Wachtwoord</label><input type="password" id="pw2" autocomplete="current-password" required><button class="pri" type="submit">Inloggen</button></form></section>';
+  if(msg)toast(msg,"err");
   $("af").onsubmit=function(e){e.preventDefault();
-    api("userLogin",{username:$("un").value,password:$("pw2").value},true).then(onLogin).catch(function(er){console.error(er);toast(er.message==="auth"?"Gebruikersnaam of wachtwoord klopt niet, of je toegang is ingetrokken.":scriptMsg(er),"err")})}}
+    api("userLogin",{username:$("un").value,password:$("pw2").value},true).then(onLogin).catch(function(er){console.error(er);toast(er.message==="auth"?"Gebruikersnaam of wachtwoord klopt niet, of je toegang is ingetrokken.":scriptMsg(er),"err")})};
+  api("status",{},true).then(function(st){
+    if(acct||!st.needsSetup||!$("setupbox"))return;
+    $("setupbox").innerHTML='<section class="panel"><h2>Eerste keer: maak het beheerdersaccount aan</h2><form class="form" id="sf"><label class="l" for="sc">Installatiecode (SETUP_CODE uit het script)</label><input type="password" id="sc" autocomplete="off" required><label class="l" for="sn">Jouw naam</label><input type="text" id="sn" autocomplete="name" required><label class="l" for="su">Gebruikersnaam</label><input type="text" id="su" autocomplete="username" autocapitalize="none" autocorrect="off" required><label class="l" for="sp">Wachtwoord (minimaal 8 tekens)</label><input type="password" id="sp" autocomplete="new-password" minlength="8" required><button class="pri" type="submit">Beheerdersaccount aanmaken</button></form></section>';
+    $("sf").onsubmit=function(e){e.preventDefault();
+      api("setupAdmin",{setupCode:$("sc").value,name:$("sn").value,username:$("su").value,password:$("sp").value},true).then(onLogin).catch(function(er){console.error(er);toast(scriptMsg(er),"err")})}
+  }).catch(function(e){console.error(e);if(!acct)toast(errText(e),"err")})}
 function showName(r){
   $("who").textContent="Je bent uitgenodigd om mee te scannen.";
   $("app").innerHTML='<section class="panel"><form class="form" id="nf"><label class="l" for="nm">Jouw naam</label><input type="text" id="nm" autocomplete="name" required value="'+esc(load_("retourName"))+'"><p class="mut" style="margin:0">De beheerder ziet bij elk artikel wie het gescand heeft.</p><button class="pri" type="submit">Doorgaan</button></form></section>';
@@ -528,8 +537,11 @@ async function load(){
   try{
     if(acct&&r.k!=="owner"){
       if(r.k==="admin"&&owner){users=(await api("users")).users;ready=true;render();return}
-      var j=await api("list");setMe(j.me);plist=j.projects;lastV=j.v;ready=true;render()}
-    else if(r.pid){applyState(await api("state",{pid:r.pid}))}
+      if(!ready){var c=cget("list");if(c){plist=c;ready=true;render()}}
+      var j=await api("list");setMe(j.me);plist=j.projects;lastV=j.v;ready=true;cset("list",plist);render()}
+    else if(r.pid){
+      if(!ready){var c2=cget("p"+r.pid);if(c2)applyState(c2)}
+      var st=await api("state",{pid:r.pid});applyState(st);cset("p"+r.pid,st)}
   }catch(e){handleErr(e)}}
 function go(){
   stopCam();cur=null;marks={};members={};myMarks={};lastV="";ready=false;$("app").innerHTML="";
@@ -549,6 +561,10 @@ document.addEventListener("click",function(e){
   var t=e.target;if(!t.getAttribute)return;
   var gg=t.getAttribute("data-go");if(gg){location.hash="#"+gg;return}
   var ua=t.getAttribute("data-ua");if(ua){var p2=ua.split("|");userAction(p2[0],p2[1]);return}
+  var xd=t.getAttribute("data-xdec"),xx=t.getAttribute("data-xdel");
+  if((xd||xx)&&cur){var key=xd||xx,ex=cur.P.extra&&cur.P.extra[key];if(!ex)return;
+    if(xd){addExtra(cur.pid,key,ex.code,ex.desc,-1);return}
+    if(confirm("‘"+ex.desc+"’ ("+ex.n+"×) uit extra retour verwijderen?"))addExtra(cur.pid,key,ex.code,ex.desc,-ex.n);return}
   var ov=t.getAttribute("data-ov");if(ov){var a=ov.split("|");resolveOver(a[0],a[1],a[2]);return}
   var dm=t.getAttribute("data-delm");if(dm){if(confirm("Toegang van deze collega intrekken?")){delete members[dm];render();w("removeMember",{pid:curPid(),mid:dm})}return}
   var d=t.getAttribute("data-delp");
