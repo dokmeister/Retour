@@ -12,7 +12,7 @@
 body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 Archivo,system-ui,-apple-system,"Segoe UI",sans-serif;padding-bottom:env(safe-area-inset-bottom,0px)}
 header.brand{background:linear-gradient(135deg,var(--brand),#0b3a82);color:#fff;border-bottom:4px solid var(--brand2);padding:calc(10px + env(safe-area-inset-top,0px)) 16px 12px}
 header.brand .in{max-width:780px;margin:0 auto;display:flex;align-items:center;gap:12px}
-header.brand img{height:40px;width:auto;max-width:120px;object-fit:contain}
+header.brand img{height:52px;width:auto;max-width:90px;object-fit:contain;background:#fff;border-radius:10px;padding:2px}
 header.brand .tt{flex:1;min-width:0}
 header.brand h1{margin:0;font-size:1.6rem;letter-spacing:.02em;color:#fff}
 header.brand h1 b{color:var(--brand2)}
@@ -86,7 +86,7 @@ summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
-<header class="brand"><div class="in"><img src="logo.png" alt="NEP The Netherlands" onerror="this.remove()"><div class="tt"><h1>Retour<b>i</b></h1><div class="co">NEP The Netherlands</div><p class="sub" id="who">Laden…</p></div><button id="out" class="hide">Uitloggen</button></div></header>
+<header class="brand"><div class="in"><img id="logo" src="logo.png" alt="NEP The Netherlands"><div class="tt"><h1>Retour<b>i</b></h1><div class="co">NEP The Netherlands</div><p class="sub" id="who">Laden…</p></div><button id="out" class="hide">Uitloggen</button></div></header>
 <main>
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="app"></div>
@@ -96,6 +96,8 @@ summary{cursor:pointer;font-weight:600}
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
+(function(){var n=["logo.png","LOGO-NEP.png","LOGO-NEP.PNG","logo-nep.png","Logo.png","logo.PNG","logo.jpg","logo.jpeg","logo.JPG","logo.svg","logo.webp","nep-logo.png","NEP.png","nep.png"],i=0,im=document.getElementById("logo");
+  if(!im)return;im.onerror=function(){i++;if(i<n.length)im.src=n[i]+"?v=2";else im.remove()};im.src=n[0]+"?v=2"})();
 /* ===== VUL DIT IN (zie README.md) ===== */
 var API_URL="https://script.google.com/macros/s/AKfycbxTRTePUvdtyvWWLOXaprklpm3C5SWaI5QVzNDsGwJcXHlQCRTZDDQLmiaJDs1bfQBc/exec"; /* de Web-app-URL van je Apps Script, eindigt op /exec */
 /* ====================================== */
