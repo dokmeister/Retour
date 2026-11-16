@@ -336,7 +336,7 @@ function renderProject(pid,P){
     $("app").innerHTML='<div class="row" style="margin-bottom:12px">'+(acct?'<button id="back">← Alle projecten</button>':'')+'</div><h2 id="ptitle"></h2>'+tools+
     (owner?'':'<p class="mut">Jij scant en vinkt af. De beheerder bevestigt daarna zelf.</p>')+share+
     '<section class="panel"><div class="row"><input type="text" id="code" class="grow" placeholder="Scan of typ artikelnummer, druk op Enter" autocomplete="off"><button class="pri" id="cam">QR-code scannen</button></div>'+
-    '<div id="camwrap" class="hide" style="margin-top:10px"><video id="vid" playsinline muted></video><div class="row" style="margin-top:8px"><button id="camstop">Camera sluiten</button><span class="mut" id="camnote"></span></div></div></section>'+
+    '<div id="camwrap" class="hide" style="margin-top:10px"><video id="vid" playsinline muted></video><div class="row" style="margin-top:8px"><button id="camstop">Camera sluiten</button><button id="torch" class="hide" type="button">Zaklamp aan</button><span class="mut" id="camnote"></span></div></div></section>'+
     '<section class="panel"><div class="bar"><i class="b1" id="f1"></i><i class="b2" id="f2"></i></div><div class="stat"><span id="cnt"></span><span id="wt"></span></div>'+
     '<div class="row" style="margin:12px 0"><input type="search" id="q" class="grow" placeholder="Zoek in lijst"><select id="lst" class="hide" aria-label="Filter op retourlijst"></select><button id="fAll">Alles</button><button id="fOpen">Open</button><button id="fDone">Afgevinkt</button></div><ul id="list"></ul></section>';
     if($("back"))$("back").onclick=function(){stopCam();location.hash=""};
@@ -344,7 +344,7 @@ function renderProject(pid,P){
     if($("addpdf"))$("addpdf").addEventListener("change",function(e){var fl=Array.prototype.slice.call(e.target.files);e.target.value="";importFiles(fl,pid)});
     if($("stay")){$("stay").onclick=function(){stayRest(pid,false)};$("unstay").onclick=function(){stayRest(pid,true)};$("ov").onclick=function(){ovOpen=!ovOpen;render()}}
     $("code").addEventListener("keydown",function(e){if(e.key==="Enter"){scan(this.value);this.value=""}});
-    $("cam").onclick=startCam;$("camstop").onclick=stopCam;
+    $("torch").onclick=toggleTorch;$("cam").onclick=startCam;$("camstop").onclick=stopCam;
     $("q").addEventListener("input",function(){q=norm(this.value);render()});
     $("lst").addEventListener("change",function(){listF=this.value;render()});
     [["fAll","all"],["fOpen","open"],["fDone","done"]].forEach(function(f){$(f[0]).onclick=function(){filter=f[1];render()}});
@@ -495,6 +495,8 @@ async function startCam(){
     var v=$("vid");v.srcObject=stream;await v.play();
     try{var tr=stream.getVideoTracks()[0],cap=tr.getCapabilities&&tr.getCapabilities();
       if(cap&&cap.focusMode&&cap.focusMode.indexOf("continuous")>=0)await tr.applyConstraints({advanced:[{focusMode:"continuous"}]})}catch(e){}
+    try{var tk=stream.getVideoTracks()[0],cp=tk.getCapabilities&&tk.getCapabilities();torchOn=false;
+      if(cp&&cp.torch){$("torch").textContent="Zaklamp aan";$("torch").classList.remove("hide")}else $("torch").classList.add("hide")}catch(e){$("torch").classList.add("hide")}
     $("camwrap").classList.remove("hide");$("camnote").textContent="Houd de QR-code in beeld, niet te dichtbij";
     var det=null;if("BarcodeDetector" in window){try{det=new BarcodeDetector({formats:["qr_code"]})}catch(e){try{det=new BarcodeDetector()}catch(e2){det=null}}}
     if(!det&&!window.jsQR){try{await lib("jsqr")}catch(e){}}
@@ -511,7 +513,11 @@ async function startCam(){
     var n=e&&e.name,msg=n==="NotAllowedError"?"Camera geweigerd. Sta de camera toe in de instellingen van je browser voor deze site.":n==="NotFoundError"?"Geen camera gevonden op dit apparaat.":n==="NotReadableError"?"De camera wordt al door een andere app gebruikt.":"Camera starten mislukt.";
     toast(msg,"err")}
 }
-function stopCam(){
+var torchOn=false;
+function toggleTorch(){
+  var tk=stream&&stream.getVideoTracks()[0];if(!tk)return;var want=!torchOn;
+  tk.applyConstraints({advanced:[{torch:want}]}).then(function(){torchOn=want;$("torch").textContent=want?"Zaklamp uit":"Zaklamp aan"}).catch(function(){toast("Zaklamp werkt niet op dit apparaat","err")})}
+function stopCam(){torchOn=false;var tb=$("torch");if(tb)tb.classList.add("hide");
   clearTimeout(tmr);if(reader){try{reader.reset()}catch(e){}reader=null}
   if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null}
   var c=$("camwrap");if(c)c.classList.add("hide")}
