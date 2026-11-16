@@ -433,7 +433,7 @@ function idxFor(P){if(idxC&&idxC.items===P.items&&idxC.len===P.items.length)retu
   idxC={items:P.items,len:P.items.length,byCode:by,list:list};return idxC}
 function scan(raw){
   var v=norm(raw),pid=curPid(),P=getP(pid);if(!v||!P)return;
-  if(document.querySelector(".modal"))return;var now=Date.now();if(v===lastScan&&now-lastT<1100)return;lastScan=v;lastT=now;stopCam();
+  if(document.querySelector(".modal"))return;var now=Date.now();if(v===lastScan&&now-lastT<1100)return;lastScan=v;lastT=now;stopCam();if(v.indexOf("250904")>-1)party();
   var ix=idxFor(P),hit=null,i0,L=ix.byCode[v];
   if(L)for(i0=0;i0<L.length;i0++)if(me(pid,L[i0].id)<L[i0].qty){hit=L[i0];break}
   if(!hit){for(i0=0;i0<ix.list.length;i0++){var c=ix.list[i0];if(me(pid,c.id)<c.qty&&v.indexOf(c.n)>-1){hit=c;break}}}
@@ -461,6 +461,25 @@ function tone(f,t0,d,type,vol){var o=AC.createOscillator(),g=AC.createGain();o.t
 function beep(ok){try{unlockAudio();if(!AC)return;
   if(ok){tone(988,0,.12,"sine",.35);tone(1319,.09,.22,"sine",.35)}
   else{tone(220,0,.16,"square",.18);tone(165,.19,.26,"square",.18)}}catch(e){}}
+/* Verrassing: artikel 250904 laat 5 seconden kleine draadloze intercom-beltpacks vallen (eigen tekening, zonder merknaam) */
+var partyOn=0;
+var PACK='<svg viewBox="0 0 24 44" width="100%" height="100%"><rect x="16.5" y="1" width="3" height="12" rx="1.5" fill="#2b3440"/><rect x="3" y="9" width="18" height="33" rx="4" fill="#3a4350" stroke="#1a2028" stroke-width="1.2"/><rect x="6" y="13" width="12" height="7" rx="1.2" fill="#8fd6f2"/><circle cx="8" cy="26" r="1.9" fill="#d9e2ec"/><circle cx="12" cy="26" r="1.9" fill="#d9e2ec"/><circle cx="16" cy="26" r="1.9" fill="#d9e2ec"/><rect x="6.5" y="31" width="11" height="3.2" rx="1.2" fill="#00a3e0"/><rect x="6.5" y="36" width="11" height="3.2" rx="1.2" fill="#e5004a"/></svg>';
+function party(){
+  if(partyOn)return;partyOn=1;setTimeout(function(){partyOn=0},9000);
+  if(window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+  var T=document.createElement("div");T.setAttribute("aria-hidden","true");T.style.cssText="position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:30";
+  document.body.appendChild(T);
+  if(!document.getElementById("pst")){var st=document.createElement("style");st.id="pst";
+    st.textContent="@keyframes pfall{0%{transform:translate(0,-60px) rotate(0)}100%{transform:translate(var(--dx),calc(100vh + 80px)) rotate(var(--rot))}}";document.head.appendChild(st)}
+  var t0=Date.now();
+  var iv=setInterval(function(){
+    if(Date.now()-t0>5000){clearInterval(iv);setTimeout(function(){T.remove()},4500);return}
+    for(var k=0;k<2;k++){var e=document.createElement("span"),d=2.4+Math.random()*2,w=16+Math.random()*14;
+      e.innerHTML=PACK;
+      e.style.cssText="position:absolute;top:0;left:"+(Math.random()*96)+"%;width:"+w+"px;height:"+(w*1.83)+"px;--dx:"+((Math.random()-.5)*120)+"px;--rot:"+((Math.random()-.5)*360)+"deg;animation:pfall "+d+"s linear forwards";
+      T.appendChild(e);(function(x,dd){setTimeout(function(){x.remove()},dd*1000+100)})(e,d)}
+  },110);
+}
 /* Snelle QR-lezer: ingebouwde detector waar die bestaat, anders jsQR op het camerabeeld, anders ZXing. */
 function jsqrRead(v,cv,cx){
   if(!window.jsQR||!v.videoWidth)return"";
